@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "950126131142",
+    "project_id": "derma-84a96",
+    "storage_bucket": "derma-84a96.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:950126131142:android:9a5e5e863677bae8cd64c7",
+        "android_client_info": {
+          "package_name": "com.example.dermascan"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBqPMhqJd2uMZIvZfa83Mem-3lRU2nawLM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
