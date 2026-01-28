@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:dermascan/services/email_service.dart';
+import 'package:intl/intl.dart';
 
 class StaffBookAppointmentPage extends StatefulWidget {
   const StaffBookAppointmentPage({super.key});
@@ -27,23 +29,8 @@ class _StaffBookAppointmentPageState extends State<StaffBookAppointmentPage> {
   String? _selectedTimeSlot;
   bool _isLoading = false;
 
-  // Time slots available for booking
-  final List<String> _timeSlots = [
-    "09:00 AM",
-    "09:30 AM",
-    "10:00 AM",
-    "10:30 AM",
-    "11:00 AM",
-    "11:30 AM",
-    "12:00 PM",
-    "02:00 PM",
-    "02:30 PM",
-    "03:00 PM",
-    "03:30 PM",
-    "04:00 PM",
-    "04:30 PM",
-    "05:00 PM",
-  ];
+  // Time slots available for booking (dynamically populated based on doctor's schedule)
+  final List<String> _timeSlots = [];
 
   List<String> _bookedSlots = [];
 
@@ -58,20 +45,103 @@ class _StaffBookAppointmentPageState extends State<StaffBookAppointmentPage> {
     
     final dateOnly = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day);
     final tomorrow = dateOnly.add(const Duration(days: 1));
+    final dateStr = DateFormat('yyyy-MM-dd').format(_selectedDate);
+    final weekday = _selectedDate.weekday; // 1 (Mon) to 7 (Sun)
 
-    final snapshot = await _firestore
-        .collection('appointments')
-        .where('doctor_id', isEqualTo: _selectedDoctorId)
-        .where('appodate', isGreaterThanOrEqualTo: Timestamp.fromDate(dateOnly))
-        .where('appodate', isLessThan: Timestamp.fromDate(tomorrow))
-        .get();
+    setState(() => _isLoading = true);
 
-    setState(() {
-      _bookedSlots = snapshot.docs
-          .map((doc) => doc.data()['time_slot'] as String? ?? '')
-          .where((slot) => slot.isNotEmpty)
-          .toList();
-    });
+    try {
+      // 1. Fetch Doctor's profile for weekly schedule
+      final doctorDoc = await _firestore.collection('doctors').doc(_selectedDoctorId).get();
+      final doctorData = doctorDoc.data();
+      final weeklySchedule = doctorData?['weeklySchedule'] as Map<String, dynamic>?;
+
+      // 2. Fetch Doctor's manual availability for this specific date
+      final availabilityDoc = await _firestore
+          .collection('doctors')
+          .doc(_selectedDoctorId)
+          .collection('availability')
+          .doc(dateStr)
+          .get();
+
+      List<String> generatedSlots = [];
+      
+      debugPrint("Staff Booking: Doctor=${doctorData?['name']}, weeklySchedule=$weeklySchedule");
+      
+      if (availabilityDoc.exists && availabilityDoc.data()?['slots'] != null) {
+        final List<dynamic> slots = availabilityDoc.data()!['slots'];
+        generatedSlots = slots.map((s) => s.toString()).toList();
+        debugPrint("Staff Booking: Using MANUAL OVERRIDE for date $dateStr");
+      } else if (weeklySchedule != null) {
+        // Explicitly cast days to List<int> for proper comparison
+        final List<int> workDays = (weeklySchedule['days'] as List<dynamic>?)
+            ?.map((d) => d is int ? d : int.tryParse(d.toString()) ?? 0)
+            .toList() ?? [];
+        
+        debugPrint("Staff Booking: weekday=$weekday (${['', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][weekday]}), workDays=$workDays, match=${workDays.contains(weekday)}");
+        
+        if (workDays.contains(weekday)) {
+          final String startTimeStr = weeklySchedule['startTime'] ?? '10:00';
+          final String endTimeStr = weeklySchedule['endTime'] ?? '16:00';
+          final int duration = weeklySchedule['slotDuration'] ?? 20;
+          debugPrint("Staff Booking: Generating slots from $startTimeStr to $endTimeStr ($duration min)");
+          generatedSlots = _generateTimeSlots(startTimeStr, endTimeStr, duration);
+        } else {
+          debugPrint("Staff Booking: Doctor not working on this day");
+          generatedSlots = [];
+        }
+      } else {
+        // Fallback: standard slots for legacy doctors without weeklySchedule
+        debugPrint("Staff Booking: NO weeklySchedule found, using FALLBACK slots");
+        generatedSlots = _generateTimeSlots('10:00', '16:00', 20);
+      }
+
+      // 3. Fetch booked slots
+      final snapshot = await _firestore
+          .collection('appointments')
+          .where('doctor_id', isEqualTo: _selectedDoctorId)
+          .where('appodate', isGreaterThanOrEqualTo: Timestamp.fromDate(dateOnly))
+          .where('appodate', isLessThan: Timestamp.fromDate(tomorrow))
+          .get();
+
+      setState(() {
+        _timeSlots.clear();
+        _timeSlots.addAll(generatedSlots);
+        
+        _bookedSlots = snapshot.docs
+            .map((doc) => doc.data()['time_slot'] as String? ?? '')
+            .where((slot) => slot.isNotEmpty)
+            .toList();
+
+        // Sanitize selection
+        if (_selectedTimeSlot != null && !_timeSlots.contains(_selectedTimeSlot)) {
+          _selectedTimeSlot = null;
+        }
+      });
+    } catch (e) {
+      debugPrint("Error loading slots: $e");
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  List<String> _generateTimeSlots(String start, String end, int durationMinutes) {
+    List<String> slots = [];
+    try {
+      final startParts = start.split(':');
+      final endParts = end.split(':');
+      
+      var current = DateTime(2000, 1, 1, int.parse(startParts[0]), int.parse(startParts[1]));
+      final endTime = DateTime(2000, 1, 1, int.parse(endParts[0]), int.parse(endParts[1]));
+      
+      while (current.isBefore(endTime)) {
+        slots.add(DateFormat('hh:mm a').format(current));
+        current = current.add(Duration(minutes: durationMinutes));
+      }
+    } catch (e) {
+      debugPrint("Error generating slots: $e");
+    }
+    return slots;
   }
 
   void _handleBooking() async {
@@ -88,6 +158,101 @@ class _StaffBookAppointmentPageState extends State<StaffBookAppointmentPage> {
       return;
     }
 
+    // Show payment confirmation
+    _showPaymentConfirmation();
+  }
+
+  void _showPaymentConfirmation() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        contentPadding: const EdgeInsets.all(24),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: accentColor.withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.payment_rounded, color: accentColor, size: 48),
+            ),
+            const SizedBox(height: 20),
+            const Text(
+              "Consultation Fee",
+              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: textColor),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              "Patient: $_selectedPatientName\nDoctor: Dr. $_selectedDoctorName",
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+            ),
+            const SizedBox(height: 20),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.green.shade50,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.green.shade200),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.currency_rupee_rounded, color: Colors.green.shade700, size: 28),
+                  Text(
+                    "400",
+                    style: TextStyle(
+                      fontSize: 32,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.green.shade700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      side: BorderSide(color: Colors.grey.shade300),
+                    ),
+                    child: const Text("Cancel", style: TextStyle(color: Colors.grey)),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      _processBooking();
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: accentColor,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    child: const Text("Pay ₹400", style: TextStyle(fontWeight: FontWeight.bold)),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _processBooking() async {
     setState(() => _isLoading = true);
     try {
       // 1. Calculate Token Number for the selected date
@@ -102,7 +267,7 @@ class _StaffBookAppointmentPageState extends State<StaffBookAppointmentPage> {
 
       final nextToken = countSnapshot.docs.length + 1;
 
-      // 2. Create Appointment
+      // 2. Create Appointment with consultation fee
       await _firestore.collection('appointments').add({
         'patient_id': _selectedPatientId,
         'doctor_id': _selectedDoctorId,
@@ -112,8 +277,28 @@ class _StaffBookAppointmentPageState extends State<StaffBookAppointmentPage> {
         'time_slot': _selectedTimeSlot,
         'tokenno': nextToken,
         'status': 'Booked',
+        'consultationFee': 400,
         'createdAt': FieldValue.serverTimestamp(),
       });
+
+      // 3. Send automated email confirmation to patient
+      if (_selectedPatientId != null) {
+        final patientDoc = await _firestore.collection('patients').doc(_selectedPatientId).get();
+        if (patientDoc.exists) {
+          final patientData = patientDoc.data() as Map<String, dynamic>;
+          final String? patientEmail = patientData['email'];
+          if (patientEmail != null && patientEmail.isNotEmpty) {
+            EmailService.sendAppointmentConfirmation(
+              patientName: _selectedPatientName ?? 'Patient',
+              patientEmail: patientEmail,
+              doctorName: _selectedDoctorName ?? 'Doctor',
+              tokenNumber: nextToken,
+              date: "${_selectedDate.day}/${_selectedDate.month}/${_selectedDate.year}",
+              timeSlot: _selectedTimeSlot ?? '',
+            );
+          }
+        }
+      }
 
       if (!mounted) return;
       
@@ -429,6 +614,44 @@ class _StaffBookAppointmentPageState extends State<StaffBookAppointmentPage> {
   }
 
   Widget _buildTimeSlotSelector() {
+    if (_selectedDoctorId == null) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(color: inputFill, borderRadius: BorderRadius.circular(12)),
+        child: const Center(child: Text("Select a doctor to view slots", style: TextStyle(color: Colors.grey))),
+      );
+    }
+
+    if (_isLoading) {
+      return const Center(child: Padding(padding: EdgeInsets.all(20), child: CircularProgressIndicator(color: accentColor)));
+    }
+
+    if (_timeSlots.isEmpty) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.orange.shade50,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.orange.shade200),
+        ),
+        child: const Column(
+          children: [
+            Icon(Icons.event_busy_rounded, color: Colors.orange, size: 32),
+            SizedBox(height: 8),
+            Text("No Availability Set", style: TextStyle(fontWeight: FontWeight.bold, color: textColor)),
+            Text("The doctor hasn't enabled any slots for this date.", textAlign: TextAlign.center, style: TextStyle(fontSize: 12, color: Colors.grey)),
+          ],
+        ),
+      );
+    }
+
+    final now = DateTime.now();
+    final isToday = _selectedDate.year == now.year && 
+                    _selectedDate.month == now.month && 
+                    _selectedDate.day == now.day;
+    
     return Wrap(
       spacing: 10,
       runSpacing: 10,
@@ -436,40 +659,85 @@ class _StaffBookAppointmentPageState extends State<StaffBookAppointmentPage> {
         final isBooked = _bookedSlots.contains(slot);
         final isSelected = _selectedTimeSlot == slot;
         
+        // Check if slot is in the past for today
+        bool isPast = false;
+        if (isToday) {
+          final slotParts = slot.split(' ');
+          final timeParts = slotParts[0].split(':');
+          int hour = int.parse(timeParts[0]);
+          final minute = int.parse(timeParts[1]);
+          if (slotParts[1] == 'PM' && hour != 12) hour += 12;
+          if (slotParts[1] == 'AM' && hour == 12) hour = 0;
+          final slotTime = DateTime(now.year, now.month, now.day, hour, minute);
+          isPast = slotTime.isBefore(now);
+        }
+        
+        final isUnavailable = isBooked || isPast;
+        
         return GestureDetector(
-          onTap: isBooked ? null : () {
+          onTap: isUnavailable ? null : () {
             setState(() => _selectedTimeSlot = slot);
           },
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             decoration: BoxDecoration(
-              color: isBooked 
-                  ? Colors.grey.shade200 
+              color: isUnavailable 
+                  ? Colors.red.shade50 
                   : isSelected 
                       ? accentColor 
                       : inputFill,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                color: isBooked 
-                    ? Colors.grey.shade300 
+                color: isUnavailable 
+                    ? Colors.red.shade300 
                     : isSelected 
                         ? accentColor 
                         : Colors.transparent,
                 width: 2,
               ),
             ),
-            child: Text(
-              slot,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: isBooked 
-                    ? Colors.grey.shade400 
-                    : isSelected 
-                        ? Colors.white 
-                        : textColor,
-                decoration: isBooked ? TextDecoration.lineThrough : null,
-              ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  slot,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: isUnavailable 
+                        ? Colors.red.shade400 
+                        : isSelected 
+                            ? Colors.white 
+                            : textColor,
+                    decoration: isUnavailable ? TextDecoration.lineThrough : null,
+                  ),
+                ),
+                if (isBooked) ...[
+                  const SizedBox(height: 4),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.red.shade100,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.block_rounded, size: 10, color: Colors.red.shade600),
+                        const SizedBox(width: 3),
+                        Text(
+                          "Booked",
+                          style: TextStyle(
+                            fontSize: 9,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.red.shade600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ],
             ),
           ),
         );

@@ -4,6 +4,7 @@ import 'package:dermascan/services/firebase_auth_service.dart';
 import 'package:dermascan/landing_page.dart';
 import 'package:dermascan/patient/patient_dashboard.dart';
 import 'package:dermascan/admin/admin_dashboard.dart';
+import 'package:dermascan/doctor/doctor_dashboard.dart';
 
 class AuthWrapper extends StatefulWidget {
   const AuthWrapper({super.key});
@@ -36,6 +37,8 @@ class _AuthWrapperState extends State<AuthWrapper> {
 
         if (role == 'admin' || role == 'staff') {
           _startScreen = const ClinicStaffDashboard();
+        } else if (role == 'doctor') {
+          _startScreen = const DoctorDashboard();
         } else {
           // Default to patient if role is missing or 'patient'
           _startScreen = const PatientDashboard();

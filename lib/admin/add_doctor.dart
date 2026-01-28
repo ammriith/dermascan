@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -28,6 +29,14 @@ class _AddDoctorPageState extends State<AddDoctorPage> {
   final TextEditingController _passwordController = TextEditingController();
 
   bool _isLoading = false;
+  bool _isEmailSending = false;
+  String? _emailStatusMessage;
+  bool _emailSuccess = false;
+
+  // Weekly Schedule State
+  final Set<int> _selectedDays = {1, 2, 3, 4, 5}; // Monday to Friday
+  TimeOfDay _startTime = const TimeOfDay(hour: 10, minute: 0);
+  TimeOfDay _endTime = const TimeOfDay(hour: 16, minute: 0);
 
   @override
   void dispose() {
@@ -87,11 +96,20 @@ class _AddDoctorPageState extends State<AddDoctorPage> {
         'experience': int.tryParse(_experienceController.text.trim()) ?? 0,
         'consultationFee': double.tryParse(_consultationFeeController.text.trim()) ?? 0.0,
         'isVerified': true,
+        'weeklySchedule': {
+          'days': _selectedDays.toList(),
+          'startTime': '${_startTime.hour.toString().padLeft(2, '0')}:${_startTime.minute.toString().padLeft(2, '0')}',
+          'endTime': '${_endTime.hour.toString().padLeft(2, '0')}:${_endTime.minute.toString().padLeft(2, '0')}',
+          'slotDuration': 20, // requested 20 mins
+        },
         'createdAt': FieldValue.serverTimestamp(),
       });
 
       if (mounted) {
-        // Show credentials dialog
+        // Automatically trigger email sending
+        _sendEmailViaService(_nameController.text.trim(), email, password, isAutomated: true);
+        
+        // Show credentials dialog (it now displays the automated status)
         _showCredentialsDialog(
           name: _nameController.text.trim(),
           email: email,
@@ -192,6 +210,55 @@ class _AddDoctorPageState extends State<AddDoctorPage> {
                     "Send login credentials to the doctor",
                     style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
                     textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 12),
+                  
+                  // Automated Email Status
+                  StatefulBuilder(
+                    builder: (context, setDialogState) {
+                      // We use a listener or check the parent state
+                      return Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: _isEmailSending 
+                              ? Colors.blue.shade50 
+                              : (_emailSuccess ? Colors.green.shade50 : Colors.red.shade50),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (_isEmailSending)
+                              const SizedBox(
+                                width: 14,
+                                height: 14,
+                                child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation(Colors.blue)),
+                              )
+                            else 
+                              Icon(
+                                _emailSuccess ? Icons.check_circle_rounded : Icons.error_outline_rounded,
+                                size: 16,
+                                color: _emailSuccess ? Colors.green : Colors.red,
+                              ),
+                            const SizedBox(width: 8),
+                            Flexible(
+                              child: Text(
+                                _isEmailSending 
+                                    ? "Sending automated email..." 
+                                    : (_emailStatusMessage ?? "Email sending pending"),
+                                style: TextStyle(
+                                  fontSize: 12, 
+                                  color: _isEmailSending 
+                                      ? Colors.blue.shade700 
+                                      : (_emailSuccess ? Colors.green.shade700 : Colors.red.shade700),
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
                   ),
                   const SizedBox(height: 16),
                   
@@ -353,15 +420,66 @@ class _AddDoctorPageState extends State<AddDoctorPage> {
     }
   }
 
-  Future<void> _sendEmailViaService(String doctorName, String doctorEmail, String password) async {
-    // Show loading
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => const Center(
-        child: CircularProgressIndicator(color: accentColor),
-      ),
-    );
+  Future<void> _sendEmailViaService(String doctorName, String doctorEmail, String password, {bool isAutomated = false}) async {
+    if (mounted && isAutomated) {
+      setState(() {
+        _isEmailSending = true;
+        _emailStatusMessage = "Sending...";
+        _emailSuccess = false;
+      });
+    }
+    
+    // On Web platform, SMTP doesn't work - use mailto link instead
+    if (kIsWeb) {
+      if (mounted && isAutomated) {
+        setState(() {
+          _isEmailSending = false;
+          _emailStatusMessage = "Web: Use manual email button";
+          _emailSuccess = false;
+        });
+      }
+      
+      if (!isAutomated) {
+        final emailSubject = Uri.encodeComponent("Your DermaScan Doctor Account Credentials");
+        final emailBody = Uri.encodeComponent(
+          "Dear Dr. $doctorName,\n\n"
+          "Welcome to DermaScan Clinic!\n\n"
+          "Your doctor account has been created. Please use the following credentials to login:\n\n"
+          "Email: $doctorEmail\n"
+          "Password: $password\n\n"
+          "For security, please change your password after your first login.\n\n"
+          "Go to: Settings > Change Password\n\n"
+          "Best regards,\n"
+          "DermaScan Clinic Team"
+        );
+        
+        final mailtoUri = Uri.parse('mailto:$doctorEmail?subject=$emailSubject&body=$emailBody');
+        
+        try {
+          if (await canLaunchUrl(mailtoUri)) {
+            await launchUrl(mailtoUri);
+          } else {
+            final credentials = "Doctor Login Credentials\n\nEmail: $doctorEmail\nPassword: $password";
+            await Clipboard.setData(ClipboardData(text: credentials));
+          }
+        } catch (e) {
+          final credentials = "Doctor Login Credentials\n\nEmail: $doctorEmail\nPassword: $password";
+          await Clipboard.setData(ClipboardData(text: credentials));
+        }
+      }
+      return;
+    }
+    
+    // On mobile/desktop, use SMTP email service
+    if (!isAutomated) {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => const Center(
+          child: CircularProgressIndicator(color: accentColor),
+        ),
+      );
+    }
 
     try {
       final result = await EmailService.sendDoctorCredentials(
@@ -370,48 +488,69 @@ class _AddDoctorPageState extends State<AddDoctorPage> {
         password: password,
       );
 
-      // Close loading
-      if (mounted) Navigator.pop(context);
+      // Close loading if manual
+      if (mounted && !isAutomated) Navigator.pop(context);
 
-      if (result.success) {
+      if (mounted) {
+        setState(() {
+          _isEmailSending = false;
+          _emailSuccess = result.success;
+          _emailStatusMessage = result.success ? "Email sent successfully!" : result.message;
+        });
+      }
+
+      if (!isAutomated) {
+        if (result.success) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  const Icon(Icons.check_circle, color: Colors.white),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text('Email sent successfully to $doctorEmail')),
+                ],
+              ),
+              backgroundColor: Colors.green,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  const Icon(Icons.error_outline, color: Colors.white),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text(result.message)),
+                ],
+              ),
+              backgroundColor: Colors.red,
+              behavior: SnackBarBehavior.floating,
+              duration: const Duration(seconds: 4),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted && !isAutomated) Navigator.pop(context);
+      
+      if (mounted) {
+        setState(() {
+          _isEmailSending = false;
+          _emailSuccess = false;
+          _emailStatusMessage = "Error: $e";
+        });
+      }
+      
+      if (!isAutomated) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Row(
-              children: [
-                const Icon(Icons.check_circle, color: Colors.white),
-                const SizedBox(width: 8),
-                Expanded(child: Text('Email sent successfully to $doctorEmail')),
-              ],
-            ),
-            backgroundColor: Colors.green,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                const Icon(Icons.error_outline, color: Colors.white),
-                const SizedBox(width: 8),
-                Expanded(child: Text(result.message)),
-              ],
-            ),
+            content: Text('Error: $e'),
             backgroundColor: Colors.red,
             behavior: SnackBarBehavior.floating,
-            duration: const Duration(seconds: 4),
           ),
         );
       }
-    } catch (e) {
-      if (mounted) Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error: $e'),
-          backgroundColor: Colors.red,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
     }
   }
 
@@ -578,6 +717,9 @@ class _AddDoctorPageState extends State<AddDoctorPage> {
                 ],
               ),
 
+
+              const SizedBox(height: 24),
+              _buildWeeklyScheduleSection(),
               const SizedBox(height: 24),
               
               // Info box about login credentials
@@ -644,6 +786,115 @@ class _AddDoctorPageState extends State<AddDoctorPage> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildWeeklyScheduleSection() {
+    final List<String> weekdays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+    
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          "Weekly Booking Window",
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: textColor.withValues(alpha: 0.7)),
+        ),
+        const SizedBox(height: 12),
+        const Text(
+          "Select work days and shift timings",
+          style: TextStyle(fontSize: 12, color: Colors.grey),
+        ),
+        const SizedBox(height: 16),
+        
+        // Day Selector
+        Wrap(
+          spacing: 8,
+          children: List.generate(7, (index) {
+            final dayIndex = index + 1;
+            final isSelected = _selectedDays.contains(dayIndex);
+            return FilterChip(
+              label: Text(weekdays[index], style: TextStyle(
+                fontSize: 12, 
+                color: isSelected ? Colors.white : textColor,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+              )),
+              selected: isSelected,
+              onSelected: (selected) {
+                setState(() {
+                  if (selected) {
+                    _selectedDays.add(dayIndex);
+                  } else {
+                    _selectedDays.remove(dayIndex);
+                  }
+                });
+              },
+              selectedColor: accentColor,
+              checkmarkColor: Colors.white,
+              backgroundColor: inputFill,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            );
+          }),
+        ),
+        
+        const SizedBox(height: 16),
+        
+        // Time Window Selector
+        Row(
+          children: [
+            Expanded(
+              child: _buildTimePicker(
+                label: "Starts at",
+                time: _startTime,
+                onTap: () async {
+                  final picked = await showTimePicker(context: context, initialTime: _startTime);
+                  if (picked != null) setState(() => _startTime = picked);
+                },
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: _buildTimePicker(
+                label: "Ends at",
+                time: _endTime,
+                onTap: () async {
+                  final picked = await showTimePicker(context: context, initialTime: _endTime);
+                  if (picked != null) setState(() => _endTime = picked);
+                },
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTimePicker({required String label, required TimeOfDay time, required VoidCallback onTap}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: const TextStyle(fontSize: 11, color: Colors.grey)),
+        const SizedBox(height: 6),
+        InkWell(
+          onTap: onTap,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+            decoration: BoxDecoration(
+              color: inputFill,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  time.format(context),
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                ),
+                const Icon(Icons.access_time_rounded, size: 18, color: accentColor),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 

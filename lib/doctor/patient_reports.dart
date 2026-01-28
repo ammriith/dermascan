@@ -137,11 +137,11 @@ class _PatientReportsPageState extends State<PatientReportsPage> {
       return const Center(child: Text("Not authenticated"));
     }
     
-    // Get unique patients from appointments for this doctor
+    // Get all appointments and filter for this doctor on client side
+    // to support both doctorId and doctor_id field naming conventions
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
           .collection('appointments')
-          .where('doctorId', isEqualTo: doctorId)
           .orderBy('appodate', descending: true)
           .snapshots(),
       builder: (context, snapshot) {
@@ -162,14 +162,20 @@ class _PatientReportsPageState extends State<PatientReportsPage> {
           );
         }
 
-        final appointments = snapshot.data?.docs ?? [];
+        // Filter for this doctor's appointments (support both doctorId and doctor_id)
+        final allDocs = snapshot.data?.docs ?? [];
+        final appointments = allDocs.where((doc) {
+          final data = doc.data() as Map<String, dynamic>;
+          final docId = data['doctorId'] ?? data['doctor_id'];
+          return docId == doctorId;
+        }).toList();
         
-        // Extract unique patients
+        // Extract unique patients (support both patientId and patient_id)
         final Map<String, Map<String, dynamic>> uniquePatients = {};
         for (var doc in appointments) {
           final data = doc.data() as Map<String, dynamic>;
-          final patientId = data['patientId'] as String?;
-          final patientName = data['patientName'] as String?;
+          final patientId = (data['patientId'] ?? data['patient_id']) as String?;
+          final patientName = (data['patientName'] ?? data['patient_name']) as String?;
           
           if (patientId != null && !uniquePatients.containsKey(patientId)) {
             uniquePatients[patientId] = {
@@ -865,7 +871,6 @@ class ViewPatientReportsPage extends StatelessWidget {
     final sentToStaff = data['sentToStaff'] ?? false;
     String title = data['title'] ?? data['diagnosis'] ?? data['prediction'] ?? 'Report';
     String description = data['notes'] ?? data['description'] ?? data['medications'] ?? '';
-    
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
@@ -915,34 +920,236 @@ class ViewPatientReportsPage extends StatelessWidget {
             ),
           ],
           const SizedBox(height: 12),
-          Row(
+          Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 8,
+            runSpacing: 8,
             children: [
-              Icon(Icons.access_time_rounded, size: 14, color: Colors.grey.shade500),
-              const SizedBox(width: 6),
-              Text(dateStr, style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
-              const Spacer(),
-              if (!sentToStaff)
-                GestureDetector(
-                  onTap: () => _sendToStaff(context, reportId),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: primaryColor,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.send_rounded, size: 14, color: Colors.white),
-                        SizedBox(width: 6),
-                        Text("Send to Staff", style: TextStyle(fontSize: 12, color: Colors.white, fontWeight: FontWeight.w600)),
-                      ],
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.access_time_rounded, size: 14, color: Colors.grey.shade500),
+                  const SizedBox(width: 6),
+                  Text(dateStr, style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
+                ],
+              ),
+              
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Give Suggestion Button
+                  GestureDetector(
+                    onTap: () => _showSuggestionDialog(context, data),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: orangeAccent.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: orangeAccent.withValues(alpha: 0.3)),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.lightbulb_rounded, size: 14, color: orangeAccent),
+                          SizedBox(width: 4),
+                          Text("Suggest", style: TextStyle(fontSize: 11, color: orangeAccent, fontWeight: FontWeight.w600)),
+                        ],
+                      ),
                     ),
                   ),
-                ),
+
+                  if (!sentToStaff) ...[
+                    const SizedBox(width: 8),
+                    GestureDetector(
+                      onTap: () => _sendToStaff(context, reportId),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: primaryColor,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.send_rounded, size: 14, color: Colors.white),
+                            SizedBox(width: 4),
+                            Text("To Staff", style: TextStyle(fontSize: 11, color: Colors.white, fontWeight: FontWeight.w600)),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
             ],
           ),
         ],
+      ),
+    );
+  }
+
+  void _showSuggestionDialog(BuildContext context, Map<String, dynamic> reportData) {
+    final TextEditingController suggestionController = TextEditingController();
+    final TextEditingController medsController = TextEditingController();
+    final reportTitle = reportData['title'] ?? reportData['diagnosis'] ?? 'Report';
+    bool isSaving = false;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setState) => Container(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+            top: 24,
+            left: 24,
+            right: 24,
+          ),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 20),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: orangeAccent.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(Icons.lightbulb_rounded, color: orangeAccent),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          "Give Suggestion",
+                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                        ),
+                        Text(
+                          "Based on: $reportTitle",
+                          style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+              const Text("Doctor's Suggestion", style: TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              TextField(
+                controller: suggestionController,
+                maxLines: 3,
+                decoration: InputDecoration(
+                  hintText: "Enter your advice or suggestions for the patient...",
+                  filled: true,
+                  fillColor: Colors.grey.shade50,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: Colors.grey.shade200),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text("Recommended Medications (Optional)", style: TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              TextField(
+                controller: medsController,
+                maxLines: 2,
+                decoration: InputDecoration(
+                  hintText: "e.g. Paracetamol 500mg daily...",
+                  filled: true,
+                  fillColor: Colors.grey.shade50,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: Colors.grey.shade200),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: ElevatedButton(
+                  onPressed: isSaving ? null : () async {
+                    if (suggestionController.text.isEmpty && medsController.text.isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text("Please enter a suggestion or medication")),
+                      );
+                      return;
+                    }
+
+                    setState(() => isSaving = true);
+                    try {
+                      final docId = FirebaseAuth.instance.currentUser?.uid;
+                      final docSnap = await FirebaseFirestore.instance.collection('doctors').doc(docId).get();
+                      final doctorName = docSnap.exists ? (docSnap.data()?['name'] ?? 'Doctor') : 'Doctor';
+
+                      await FirebaseFirestore.instance.collection('doctor_suggestions').add({
+                        'patientId': patientId,
+                        'patientName': patientName,
+                        'doctorId': docId,
+                        'doctorName': doctorName,
+                        'reportTitle': reportTitle,
+                        'suggestion': suggestionController.text.trim(),
+                        'medication': medsController.text.trim(),
+                        'createdAt': FieldValue.serverTimestamp(),
+                      });
+
+                      if (context.mounted) {
+                        Navigator.pop(context);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text("Suggestion sent to patient!"),
+                            backgroundColor: greenAccent,
+                            behavior: SnackBarBehavior.floating,
+                          ),
+                        );
+                      }
+                    } catch (e) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red),
+                        );
+                      }
+                    } finally {
+                      setState(() => isSaving = false);
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: orangeAccent,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  child: isSaving
+                      ? const CircularProgressIndicator(color: Colors.white)
+                      : const Text("Send to Patient", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

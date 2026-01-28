@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:dermascan/services/firebase_auth_service.dart';
+import 'package:dermascan/services/email_service.dart';
 
 class StaffRegisterPatientPage extends StatefulWidget {
   const StaffRegisterPatientPage({super.key});
@@ -63,39 +65,136 @@ class _StaffRegisterPatientPageState extends State<StaffRegisterPatientPage> {
 
   void _handleRegistration() async {
     if (_formKey.currentState!.validate()) {
-      setState(() => _isLoading = true);
-      try {
-        // Generate password if not provided
-        String password = _passwordController.text.trim();
-        if (password.isEmpty) {
-          password = _generatePassword();
-        }
+      // Show payment confirmation modal first
+      _showPaymentConfirmation();
+    }
+  }
 
-        final result = await _authService.registerPatient(
+  void _showPaymentConfirmation() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        contentPadding: const EdgeInsets.all(24),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: accentColor.withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.payment_rounded, color: accentColor, size: 48),
+            ),
+            const SizedBox(height: 20),
+            const Text(
+              "Registration Fee",
+              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: textColor),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              "Patient: ${_nameController.text.trim()}",
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+            ),
+            const SizedBox(height: 20),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.green.shade50,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.green.shade200),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.currency_rupee_rounded, color: Colors.green.shade700, size: 28),
+                  Text(
+                    "100",
+                    style: TextStyle(
+                      fontSize: 32,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.green.shade700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      side: BorderSide(color: Colors.grey.shade300),
+                    ),
+                    child: const Text("Cancel", style: TextStyle(color: Colors.grey)),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      _processRegistration();
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: accentColor,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    child: const Text("Pay ₹100", style: TextStyle(fontWeight: FontWeight.bold)),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _processRegistration() async {
+    setState(() => _isLoading = true);
+    try {
+      // Generate password if not provided
+      String password = _passwordController.text.trim();
+      if (password.isEmpty) {
+        password = _generatePassword();
+      }
+
+      final result = await _authService.registerPatient(
+        email: _emailController.text.trim(),
+        password: password,
+        name: _nameController.text.trim(),
+        dateOfBirth: _dobController.text,
+        gender: _selectedGender,
+        phone: _phoneController.text.trim(),
+        registrationFee: 100,
+      );
+
+      if (!mounted) return;
+      if (result['success']) {
+        // Show credentials dialog
+        _showCredentialsDialog(
+          name: _nameController.text.trim(),
           email: _emailController.text.trim(),
           password: password,
-          name: _nameController.text.trim(),
-          dateOfBirth: _dobController.text,
-          gender: _selectedGender,
           phone: _phoneController.text.trim(),
         );
-
-        if (!mounted) return;
-        if (result['success']) {
-          // Show credentials dialog
-          _showCredentialsDialog(
-            name: _nameController.text.trim(),
-            email: _emailController.text.trim(),
-            password: password,
-          );
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(result['message']), backgroundColor: Colors.red),
-          );
-        }
-      } finally {
-        if (mounted) setState(() => _isLoading = false);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(result['message']), backgroundColor: Colors.red),
+        );
       }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -103,114 +202,275 @@ class _StaffRegisterPatientPageState extends State<StaffRegisterPatientPage> {
     required String name,
     required String email,
     required String password,
+    required String phone,
   }) {
+    final smsMessage = "Welcome to DermaScan!\n\n"
+        "Your patient account has been created.\n\n"
+        "Login Credentials:\n"
+        "Email: $email\n"
+        "Password: $password\n\n"
+        "Please change your password after first login.";
+
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => Dialog(
+      builder: (ctx) => Dialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Success Icon
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.green.shade50,
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(Icons.check_circle_rounded, size: 48, color: Colors.green.shade600),
-              ),
-              const SizedBox(height: 20),
-              
-              // Title
-              const Text(
-                "Patient Registered!",
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: textColor,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                "Share these login credentials with the patient",
-                style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 24),
-              
-              // Credentials Card
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: bgColor,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: Colors.grey.shade200),
-                ),
-                child: Column(
-                  children: [
-                    _buildCredentialRow("Patient Name", name, Icons.person_rounded),
-                    const Divider(height: 24),
-                    _buildCredentialRow("Username (Email)", email, Icons.email_rounded, canCopy: true),
-                    const Divider(height: 24),
-                    _buildCredentialRow("Password", password, Icons.lock_rounded, canCopy: true, isPassword: true),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 24),
-              
-              // Copy All Button
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
-                  onPressed: () {
-                    final credentials = "Patient Login Credentials\n\nEmail: $email\nPassword: $password";
-                    Clipboard.setData(ClipboardData(text: credentials));
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Credentials copied to clipboard!'),
-                        behavior: SnackBarBehavior.floating,
-                        backgroundColor: Colors.green,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(ctx).size.height * 0.85,
+            maxWidth: 400,
+          ),
+          child: SingleChildScrollView(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Success Icon
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.green.shade50,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(Icons.check_circle_rounded, size: 48, color: Colors.green.shade600),
+                  ),
+                  const SizedBox(height: 20),
+                  
+                  // Title
+                  const Text(
+                    "Patient Registered!",
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: textColor,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    "Send login credentials to the patient",
+                    style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 24),
+                  
+                  // Credentials Card
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: bgColor,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: Colors.grey.shade200),
+                    ),
+                    child: Column(
+                      children: [
+                        _buildCredentialRow("Patient Name", name, Icons.person_rounded),
+                        const Divider(height: 24),
+                        _buildCredentialRow("Username (Email)", email, Icons.email_rounded, canCopy: true),
+                        const Divider(height: 24),
+                        _buildCredentialRow("Password", password, Icons.lock_rounded, canCopy: true, isPassword: true),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  
+                  // Send SMS Button
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: () => _sendSMS(phone, smsMessage),
+                      icon: const Icon(Icons.sms_rounded, size: 18),
+                      label: const Text("Send SMS", style: TextStyle(fontWeight: FontWeight.bold)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green.shade600,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
-                    );
-                  },
-                  icon: const Icon(Icons.copy_rounded),
-                  label: const Text("Copy All Credentials"),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: accentColor,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    side: const BorderSide(color: accentColor),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
                   ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              
-              // Done Button
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () {
-                    Navigator.pop(context); // Close dialog
-                    Navigator.pop(context, true); // Return to previous screen
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: accentColor,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  const SizedBox(height: 10),
+                  
+                  // Send Email Button
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: () => _sendEmailViaService(name, email, password),
+                      icon: const Icon(Icons.email_rounded, size: 18),
+                      label: const Text("Send Email", style: TextStyle(fontWeight: FontWeight.bold)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blue.shade600,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                    ),
                   ),
-                  child: const Text("Done", style: TextStyle(fontWeight: FontWeight.bold)),
-                ),
+                  const SizedBox(height: 10),
+                  
+                  // Copy All Button
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        final credentials = "Patient Login Credentials\n\nEmail: $email\nPassword: $password";
+                        Clipboard.setData(ClipboardData(text: credentials));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Credentials copied to clipboard!'),
+                            behavior: SnackBarBehavior.floating,
+                            backgroundColor: Colors.green,
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.copy_rounded),
+                      label: const Text("Copy Credentials"),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: accentColor,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        side: const BorderSide(color: accentColor),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  
+                  // Done Button
+                  SizedBox(
+                    width: double.infinity,
+                    child: TextButton(
+                      onPressed: () {
+                        Navigator.pop(ctx); // Close dialog
+                        Navigator.pop(context, true); // Return to previous screen
+                      },
+                      style: TextButton.styleFrom(
+                        foregroundColor: Colors.grey.shade600,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                      child: const Text("Done", style: TextStyle(fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
         ),
       ),
     );
+  }
+
+  void _sendSMS(String phone, String message) async {
+    if (phone.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Phone number not available'),
+          backgroundColor: Colors.orange,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+    
+    final Uri smsUri = Uri(
+      scheme: 'sms',
+      path: phone,
+      queryParameters: {'body': message},
+    );
+    
+    try {
+      if (await canLaunchUrl(smsUri)) {
+        await launchUrl(smsUri);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Opening SMS app...'),
+            backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
+            duration: Duration(seconds: 1),
+          ),
+        );
+      } else {
+        Clipboard.setData(ClipboardData(text: message));
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('SMS not available. Credentials copied!'),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      Clipboard.setData(ClipboardData(text: message));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Credentials copied to clipboard!'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _sendEmailViaService(String patientName, String patientEmail, String password) async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => const Center(
+        child: CircularProgressIndicator(color: accentColor),
+      ),
+    );
+
+    try {
+      final result = await EmailService.sendPatientCredentials(
+        patientName: patientName,
+        patientEmail: patientEmail,
+        password: password,
+      );
+
+      if (mounted) Navigator.pop(context);
+
+      if (result.success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle, color: Colors.white),
+                const SizedBox(width: 8),
+                Expanded(child: Text('Email sent to $patientEmail')),
+              ],
+            ),
+            backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.error_outline, color: Colors.white),
+                const SizedBox(width: 8),
+                Expanded(child: Text(result.message)),
+              ],
+            ),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: $e'),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 
   Widget _buildCredentialRow(String label, String value, IconData icon, {bool canCopy = false, bool isPassword = false}) {

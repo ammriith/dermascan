@@ -378,8 +378,9 @@ class _ViewTodayAppointmentsPageState extends State<ViewTodayAppointmentsPage> w
   }
 
   Widget _buildAppointmentCard(Map<String, dynamic> data, int index) {
-    final patientName = data['patient_name'] ?? "Unknown Patient";
-    final doctorName = data['doctor_name'] ?? "Unknown Doctor";
+    // Support both camelCase (patient app) and snake_case (staff app) field names
+    final patientName = data['patient_name'] ?? data['patientName'] ?? "Unknown Patient";
+    final doctorName = data['doctor_name'] ?? data['doctorName'] ?? "Unknown Doctor";
     final token = data['tokenno'] ?? 0;
     final status = data['status'] ?? "Booked";
     final isActive = status == 'In Consultation';

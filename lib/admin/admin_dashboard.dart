@@ -3,9 +3,13 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:dermascan/admin/view_revenue.dart';
 import 'package:dermascan/admin/view_doctors.dart';
 import 'package:dermascan/admin/view_patients.dart';
+import 'package:dermascan/admin/view_users.dart';
 import 'package:dermascan/admin/settings_page.dart';
 import 'package:dermascan/admin/view_today_appointments.dart';
 import 'package:dermascan/admin/skin_scanner.dart';
+import 'package:dermascan/admin/appointments_page.dart';
+import 'package:dermascan/doctor/view_feedbacks_page.dart';
+
 
 class ClinicStaffDashboard extends StatefulWidget {
   const ClinicStaffDashboard({super.key});
@@ -126,8 +130,14 @@ class _ClinicStaffDashboardState extends State<ClinicStaffDashboard> {
                       ),
                     ),
                   ),
-                  // Tab 1: Schedule (has its own back button)
-                  const ViewTodayAppointmentsPage(),
+                  // Tab 1: Schedule - All Appointments with date filter
+                  AppointmentsPage(
+                    isDoctor: false,
+                    onBackPressed: () {
+                      setState(() => _selectedNavIndex = 0);
+                      _loadDashboardData();
+                    },
+                  ),
                   // Tab 2: Scan - with back button
                   _buildTabWithBackButton(
                     child: _buildScanContent(),
@@ -517,10 +527,21 @@ class _ClinicStaffDashboardState extends State<ClinicStaffDashboard> {
               _buildActionTile("Revenue", Icons.payments_rounded, greenAccent, () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ViewRevenuePage()))),
             ],
           ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              _buildActionTile("All Users", Icons.group_rounded, orangeAccent, () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ViewUsersPage()))),
+              const SizedBox(width: 12),
+              _buildActionTile("Feedbacks", Icons.rate_review_rounded, purpleAccent, () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ViewFeedbacksPage(isDoctor: false)))),
+              const SizedBox(width: 12),
+              Expanded(child: Container()), // Spacer
+            ],
+          ),
         ],
       ),
     );
   }
+
   
   Widget _buildActionTile(String label, IconData icon, Color color, VoidCallback onTap) {
     return Expanded(

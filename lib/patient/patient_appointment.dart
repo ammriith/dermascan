@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
+import 'package:dermascan/services/email_service.dart';
 
 class PatientAppointmentPage extends StatefulWidget {
   const PatientAppointmentPage({super.key});
@@ -74,55 +75,111 @@ class _PatientAppointmentPageState extends State<PatientAppointmentPage> {
       setState(() => _isLoading = false);
     }
   }
-1`111111111`
+
   Future<void> _loadAvailableSlots() async {
     if (_selectedDoctorId == null) return;
     
     setState(() => _isLoading = true);
     try {
-      // Get doctor's working hours (if set)
+      final dateStr = DateFormat('yyyy-MM-dd').format(_selectedDate);
+      final weekday = _selectedDate.weekday; // 1 (Mon) to 7 (Sun)
+      
+      // 1. Fetch Doctor's profile for weekly schedule
       final doctorDoc = await _firestore.collection('doctors').doc(_selectedDoctorId).get();
       final doctorData = doctorDoc.data();
+      final weeklySchedule = doctorData?['weeklySchedule'] as Map<String, dynamic>?;
+
+      // 2. Fetch Doctor's manual availability (overrides) for this specific date
+      final availabilityDoc = await _firestore
+          .collection('doctors')
+          .doc(_selectedDoctorId)
+          .collection('availability')
+          .doc(dateStr)
+          .get();
+
+      List<String> generatedSlots = [];
       
-      // Get booked appointments for selected doctor and date
-      final dateStart = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day);
-      final dateEnd = dateStart.add(const Duration(days: 1));
-      
+      if (availabilityDoc.exists && availabilityDoc.data()?['slots'] != null) {
+        // Manual override exists for this date
+        final List<dynamic> slots = availabilityDoc.data()!['slots'];
+        generatedSlots = slots.map((s) => s.toString()).toList();
+      } else if (weeklySchedule != null) {
+        // Explicitly cast days to List<int> for proper comparison
+        final List<int> workDays = (weeklySchedule['days'] as List<dynamic>?)
+            ?.map((d) => d is int ? d : int.tryParse(d.toString()) ?? 0)
+            .toList() ?? [];
+        
+        debugPrint("Patient Booking: weekday=$weekday, workDays=$workDays, contains=${workDays.contains(weekday)}");
+        
+        if (workDays.contains(weekday)) {
+          final String startTimeStr = weeklySchedule['startTime'] ?? '10:00';
+          final String endTimeStr = weeklySchedule['endTime'] ?? '16:00';
+          final int duration = weeklySchedule['slotDuration'] ?? 20;
+          
+          generatedSlots = _generateTimeSlots(startTimeStr, endTimeStr, duration);
+        } else {
+          // Doctor doesn't work on this day of the week
+          generatedSlots = [];
+        }
+      } else {
+        // No schedule set at all - fallback to default for legacy doctors
+        generatedSlots = _generateTimeSlots('10:00', '16:00', 20); 
+      }
+
+      // 3. Fetch booked appointments for selected doctor
       final appointmentsQuery = await _firestore
           .collection('appointments')
           .where('doctorId', isEqualTo: _selectedDoctorId)
-          .where('appodate', isGreaterThanOrEqualTo: Timestamp.fromDate(dateStart))
-          .where('appodate', isLessThan: Timestamp.fromDate(dateEnd))
           .get();
       
-      _bookedSlots = appointmentsQuery.docs.map((doc) {
+      final dateStart = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day);
+      final dateEnd = dateStart.add(const Duration(days: 1));
+      
+      _bookedSlots = appointmentsQuery.docs.where((doc) {
         final data = doc.data();
         final timestamp = data['appodate'] as Timestamp?;
         if (timestamp != null) {
           final dt = timestamp.toDate();
-          return DateFormat('hh:mm a').format(dt);
+          return dt.isAfter(dateStart) && dt.isBefore(dateEnd);
         }
-        return '';
-      }).where((s) => s.isNotEmpty).toList();
+        return false;
+      }).map((doc) => doc.data()['timeSlot'] as String? ?? '').where((s) => s.isNotEmpty).toList();
+
+      setState(() {
+        _allTimeSlots.clear();
+        _allTimeSlots.addAll(generatedSlots);
+        
+        _availableSlots = _allTimeSlots.where((slot) => !_bookedSlots.contains(slot)).toList();
+        
+        if (_selectedTimeSlot != null && !_allTimeSlots.contains(_selectedTimeSlot)) {
+          _selectedTimeSlot = null;
+        }
+      });
       
-      // Filter available slots
-      _availableSlots = _allTimeSlots.where((slot) => !_bookedSlots.contains(slot)).toList();
-      
-      // If today, filter out past slots
-      if (_isToday(_selectedDate)) {
-        final now = DateTime.now();
-        _availableSlots = _availableSlots.where((slot) {
-          final slotTime = _parseTimeSlot(slot);
-          return slotTime.isAfter(now);
-        }).toList();
-      }
-      
-      _selectedTimeSlot = null;
     } catch (e) {
       debugPrint('Error loading slots: $e');
     } finally {
       setState(() => _isLoading = false);
     }
+  }
+
+  List<String> _generateTimeSlots(String start, String end, int durationMinutes) {
+    List<String> slots = [];
+    try {
+      final startParts = start.split(':');
+      final endParts = end.split(':');
+      
+      var current = DateTime(2000, 1, 1, int.parse(startParts[0]), int.parse(startParts[1]));
+      final endTime = DateTime(2000, 1, 1, int.parse(endParts[0]), int.parse(endParts[1]));
+      
+      while (current.isBefore(endTime)) {
+        slots.add(DateFormat('hh:mm a').format(current));
+        current = current.add(Duration(minutes: durationMinutes));
+      }
+    } catch (e) {
+      debugPrint("Error generating slots: $e");
+    }
+    return slots;
   }
 
   bool _isToday(DateTime date) {
@@ -154,6 +211,101 @@ class _PatientAppointmentPageState extends State<PatientAppointmentPage> {
       return;
     }
 
+    // Show payment confirmation dialog
+    _showPaymentConfirmation();
+  }
+
+  void _showPaymentConfirmation() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        contentPadding: const EdgeInsets.all(24),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: primaryColor.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.payment_rounded, color: primaryColor, size: 48),
+            ),
+            const SizedBox(height: 20),
+            const Text(
+              "Consultation Fee",
+              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: textPrimary),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              "Appointment with Dr. $_selectedDoctorName",
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: textSecondary, fontSize: 14),
+            ),
+            const SizedBox(height: 20),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: greenAccent.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: greenAccent.withValues(alpha: 0.3)),
+              ),
+              child: const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.currency_rupee_rounded, color: greenAccent, size: 28),
+                  Text(
+                    "400",
+                    style: TextStyle(
+                      fontSize: 32,
+                      fontWeight: FontWeight.bold,
+                      color: greenAccent,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      side: BorderSide(color: Colors.grey.shade300),
+                    ),
+                    child: const Text("Cancel", style: TextStyle(color: textSecondary)),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      _processBooking();
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: primaryColor,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    child: const Text("Pay ₹400", style: TextStyle(fontWeight: FontWeight.bold)),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _processBooking() async {
     setState(() => _isBooking = true);
     
     try {
@@ -170,7 +322,7 @@ class _PatientAppointmentPageState extends State<PatientAppointmentPage> {
       // Parse appointment time
       final appointmentDateTime = _parseTimeSlot(_selectedTimeSlot!);
       
-      // Create appointment
+      // Create appointment with consultation fee
       await _firestore.collection('appointments').add({
         'patientId': user.uid,
         'patientName': patientName,
@@ -181,8 +333,23 @@ class _PatientAppointmentPageState extends State<PatientAppointmentPage> {
         'timeSlot': _selectedTimeSlot,
         'symptoms': _symptoms.trim(),
         'status': 'Booked',
+        'consultationFee': 400,
         'createdAt': FieldValue.serverTimestamp(),
       });
+      
+      // Get patient email for confirmation
+      final String? userEmail = user.email;
+      if (userEmail != null) {
+        // Automatically send confirmation email in background
+        EmailService.sendAppointmentConfirmation(
+          patientName: patientName,
+          patientEmail: userEmail,
+          doctorName: _selectedDoctorName ?? 'Doctor',
+          tokenNumber: 0, // Placeholder or fetch actual token if implemented
+          date: DateFormat('EEEE, MMM dd, yyyy').format(_selectedDate),
+          timeSlot: _selectedTimeSlot ?? '',
+        );
+      }
       
       if (mounted) {
         // Show success dialog
@@ -203,7 +370,7 @@ class _PatientAppointmentPageState extends State<PatientAppointmentPage> {
                 ),
                 const SizedBox(height: 20),
                 const Text(
-                  "Appointment Booked!",
+                  "Payment Successful!",
                   style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: textPrimary),
                 ),
                 const SizedBox(height: 10),
@@ -350,24 +517,32 @@ class _PatientAppointmentPageState extends State<PatientAppointmentPage> {
   }
 
   Widget _buildStep(int number, String label, bool completed) {
-    return Column(
-      children: [
-        Container(
-          width: 32,
-          height: 32,
-          decoration: BoxDecoration(
-            color: completed ? primaryColor : Colors.grey.shade200,
-            shape: BoxShape.circle,
+    return SizedBox(
+      width: 45,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 26,
+            height: 26,
+            decoration: BoxDecoration(
+              color: completed ? primaryColor : Colors.grey.shade200,
+              shape: BoxShape.circle,
+            ),
+            child: Center(
+              child: completed
+                  ? const Icon(Icons.check, color: Colors.white, size: 14)
+                  : Text("$number", style: TextStyle(color: completed ? Colors.white : textSecondary, fontWeight: FontWeight.bold, fontSize: 11)),
+            ),
           ),
-          child: Center(
-            child: completed
-                ? const Icon(Icons.check, color: Colors.white, size: 18)
-                : Text("$number", style: TextStyle(color: completed ? Colors.white : textSecondary, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 4),
+          Text(
+            label, 
+            style: TextStyle(fontSize: 9, color: completed ? primaryColor : textSecondary),
+            overflow: TextOverflow.ellipsis,
           ),
-        ),
-        const SizedBox(height: 4),
-        Text(label, style: TextStyle(fontSize: 10, color: completed ? primaryColor : textSecondary)),
-      ],
+        ],
+      ),
     );
   }
 
@@ -375,7 +550,7 @@ class _PatientAppointmentPageState extends State<PatientAppointmentPage> {
     return Expanded(
       child: Container(
         height: 2,
-        margin: const EdgeInsets.only(bottom: 16),
+        margin: const EdgeInsets.only(bottom: 18),
         color: completed ? primaryColor : Colors.grey.shade200,
       ),
     );
@@ -535,111 +710,141 @@ class _PatientAppointmentPageState extends State<PatientAppointmentPage> {
   }
 
   Widget _buildDateSelection() {
+    final bool doctorSelected = _selectedDoctorId != null;
+    
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          "Select Date",
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textPrimary),
+        Row(
+          children: [
+            const Text(
+              "Select Date",
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textPrimary),
+            ),
+            if (!doctorSelected) ...[
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: orangeAccent.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Text(
+                  "Select doctor first",
+                  style: TextStyle(fontSize: 10, color: orangeAccent, fontWeight: FontWeight.w600),
+                ),
+              ),
+            ],
+          ],
         ),
         const SizedBox(height: 16),
-        SizedBox(
-          height: 90,
-          child: ListView.builder(
-            scrollDirection: Axis.horizontal,
-            itemCount: 14, // Next 14 days
-            itemBuilder: (ctx, index) {
-              final date = DateTime.now().add(Duration(days: index));
-              final isSelected = _selectedDate.day == date.day && 
-                                 _selectedDate.month == date.month && 
-                                 _selectedDate.year == date.year;
-              final isToday = index == 0;
-              
-              return GestureDetector(
-                onTap: () {
-                  setState(() {
-                    _selectedDate = date;
-                    _selectedTimeSlot = null;
-                  });
-                  if (_selectedDoctorId != null) {
+        if (!doctorSelected)
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade50,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.grey.shade200),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.calendar_today_rounded, color: textSecondary.withValues(alpha: 0.5)),
+                const SizedBox(width: 8),
+                const Text("Select a doctor to view available dates", style: TextStyle(color: textSecondary)),
+              ],
+            ),
+          )
+        else
+          SizedBox(
+            height: 80,
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              itemCount: 14, // Next 14 days
+              itemBuilder: (ctx, index) {
+                final date = DateTime.now().add(Duration(days: index));
+                final isSelected = _selectedDate.day == date.day && 
+                                   _selectedDate.month == date.month && 
+                                   _selectedDate.year == date.year;
+                final isToday = index == 0;
+                
+                return GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      _selectedDate = date;
+                      _selectedTimeSlot = null;
+                    });
                     _loadAvailableSlots();
-                  }
-                },
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  width: 65,
-                  margin: const EdgeInsets.only(right: 10),
-                  decoration: BoxDecoration(
-                    gradient: isSelected
-                        ? const LinearGradient(colors: [primaryColor, primaryDark])
-                        : null,
-                    color: isSelected ? null : cardColor,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: isSelected ? primaryColor : Colors.grey.shade200,
+                  },
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    width: 60,
+                    margin: const EdgeInsets.only(right: 10),
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    decoration: BoxDecoration(
+                      gradient: isSelected
+                          ? const LinearGradient(colors: [primaryColor, primaryDark])
+                          : null,
+                      color: isSelected ? null : cardColor,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: isSelected ? primaryColor : (isToday ? orangeAccent : Colors.grey.shade200),
+                        width: isToday && !isSelected ? 2 : 1,
+                      ),
+                      boxShadow: isSelected
+                          ? [BoxShadow(color: primaryColor.withValues(alpha: 0.3), blurRadius: 10)]
+                          : null,
                     ),
-                    boxShadow: isSelected
-                        ? [BoxShadow(color: primaryColor.withValues(alpha: 0.3), blurRadius: 10)]
-                        : null,
-                  ),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        DateFormat('EEE').format(date),
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: isSelected ? Colors.white70 : textSecondary,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        "${date.day}",
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: isSelected ? Colors.white : textPrimary,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        DateFormat('MMM').format(date),
-                        style: TextStyle(
-                          fontSize: 10,
-                          color: isSelected ? Colors.white70 : textSecondary,
-                        ),
-                      ),
-                      if (isToday) ...[
-                        const SizedBox(height: 4),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: isSelected ? Colors.white.withValues(alpha: 0.2) : orangeAccent.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(6),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          DateFormat('EEE').format(date),
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: isSelected ? Colors.white70 : textSecondary,
+                            fontWeight: FontWeight.w500,
                           ),
-                          child: Text(
-                            "Today",
-                            style: TextStyle(
-                              fontSize: 8,
-                              fontWeight: FontWeight.bold,
-                              color: isSelected ? Colors.white : orangeAccent,
-                            ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          "${date.day}",
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: isSelected ? Colors.white : textPrimary,
+                          ),
+                        ),
+                        Text(
+                          DateFormat('MMM').format(date),
+                          style: TextStyle(
+                            fontSize: 9,
+                            color: isSelected ? Colors.white70 : textSecondary,
                           ),
                         ),
                       ],
-                    ],
+                    ),
                   ),
-                ),
-              );
-            },
+                );
+              },
+            ),
           ),
-        ),
       ],
     );
   }
 
   Widget _buildTimeSlotSelection() {
+    // Check for past slots if today is selected
+    List<String> pastSlots = [];
+    if (_isToday(_selectedDate)) {
+      final now = DateTime.now();
+      pastSlots = _allTimeSlots.where((slot) {
+        final slotTime = _parseTimeSlot(slot);
+        return slotTime.isBefore(now);
+      }).toList();
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -650,7 +855,7 @@ class _PatientAppointmentPageState extends State<PatientAppointmentPage> {
               "Select Time",
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textPrimary),
             ),
-            if (_availableSlots.isNotEmpty)
+            if (_selectedDoctorId != null && _availableSlots.isNotEmpty)
               Text(
                 "${_availableSlots.length} slots available",
                 style: const TextStyle(fontSize: 12, color: greenAccent, fontWeight: FontWeight.w600),
@@ -682,22 +887,27 @@ class _PatientAppointmentPageState extends State<PatientAppointmentPage> {
               child: CircularProgressIndicator(color: primaryColor),
             ),
           )
-        else if (_availableSlots.isEmpty)
+        else if (_allTimeSlots.isEmpty)
           Container(
             padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
-              color: Colors.red.shade50,
+              color: Colors.orange.shade50,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.red.shade200),
+              border: Border.all(color: Colors.orange.shade200),
             ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
+            child: Column(
               children: [
-                Icon(Icons.event_busy_rounded, color: Colors.red.shade400),
-                const SizedBox(width: 8),
-                Text(
-                  "No slots available for this date",
-                  style: TextStyle(color: Colors.red.shade600, fontWeight: FontWeight.w500),
+                Icon(Icons.event_busy_rounded, size: 40, color: Colors.orange.shade400),
+                const SizedBox(height: 12),
+                const Text(
+                  "No Availability Set",
+                  style: TextStyle(fontWeight: FontWeight.bold, color: textPrimary),
+                ),
+                const SizedBox(height: 4),
+                const Text(
+                  "The doctor has not set their availability for this date yet.",
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 13, color: textSecondary),
                 ),
               ],
             ),
@@ -706,33 +916,81 @@ class _PatientAppointmentPageState extends State<PatientAppointmentPage> {
           Wrap(
             spacing: 10,
             runSpacing: 10,
-            children: _availableSlots.map((slot) {
+            children: _allTimeSlots.map((slot) {
               final isSelected = _selectedTimeSlot == slot;
+              final isBooked = _bookedSlots.contains(slot);
+              final isPast = pastSlots.contains(slot);
+              final isUnavailable = isBooked || isPast;
+              
               return GestureDetector(
-                onTap: () => setState(() => _selectedTimeSlot = slot),
+                onTap: isUnavailable ? null : () => setState(() => _selectedTimeSlot = slot),
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 200),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                   decoration: BoxDecoration(
                     gradient: isSelected 
                         ? const LinearGradient(colors: [primaryColor, primaryDark])
                         : null,
-                    color: isSelected ? null : cardColor,
+                    color: isSelected 
+                        ? null 
+                        : isUnavailable 
+                            ? Colors.red.shade50 
+                            : cardColor,
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
-                      color: isSelected ? primaryColor : Colors.grey.shade200,
+                      color: isSelected 
+                          ? primaryColor 
+                          : isUnavailable 
+                              ? Colors.red.shade300 
+                              : Colors.grey.shade200,
                     ),
                     boxShadow: isSelected
                         ? [BoxShadow(color: primaryColor.withValues(alpha: 0.3), blurRadius: 8)]
                         : null,
                   ),
-                  child: Text(
-                    slot,
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: isSelected ? Colors.white : textPrimary,
-                    ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        slot,
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: isSelected 
+                              ? Colors.white 
+                              : isUnavailable 
+                                  ? Colors.red.shade400
+                                  : textPrimary,
+                          decoration: isUnavailable ? TextDecoration.lineThrough : null,
+                        ),
+                      ),
+                      if (isBooked) ...[
+                        const SizedBox(height: 4),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.red.shade100,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.block_rounded, size: 10, color: Colors.red.shade600),
+                              const SizedBox(width: 3),
+                              Text(
+                                "Booked",
+                                style: TextStyle(
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.red.shade600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+
+                    ],
                   ),
                 ),
               );
@@ -820,6 +1078,38 @@ class _PatientAppointmentPageState extends State<PatientAppointmentPage> {
           _buildSummaryRow(Icons.medical_services_rounded, "Specialization", _selectedSpecialization ?? ''),
           _buildSummaryRow(Icons.calendar_today_rounded, "Date", DateFormat('EEEE, MMM dd, yyyy').format(_selectedDate)),
           _buildSummaryRow(Icons.access_time_rounded, "Time", _selectedTimeSlot ?? ''),
+          const Divider(height: 24),
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: greenAccent.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: greenAccent.withValues(alpha: 0.3)),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Row(
+                  children: [
+                    Icon(Icons.payment_rounded, color: greenAccent, size: 20),
+                    SizedBox(width: 10),
+                    Text("Consultation Fee", style: TextStyle(fontWeight: FontWeight.w600, color: textPrimary)),
+                  ],
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: greenAccent,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Text(
+                    "₹400",
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );

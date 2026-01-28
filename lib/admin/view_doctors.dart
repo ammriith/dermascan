@@ -304,7 +304,23 @@ class _ViewDoctorsPageState extends State<ViewDoctorsPage> {
             onPressed: () async {
               Navigator.pop(ctx);
               try {
-                await FirebaseFirestore.instance.collection('doctors').doc(docId).delete();
+                final firestore = FirebaseFirestore.instance;
+                
+                // Delete from doctors collection
+                await firestore.collection('doctors').doc(docId).delete();
+                
+                // Also delete from users collection
+                await firestore.collection('users').doc(docId).delete();
+                
+                // Delete related appointments
+                final appointments = await firestore
+                    .collection('appointments')
+                    .where('doctorId', isEqualTo: docId)
+                    .get();
+                for (var doc in appointments.docs) {
+                  await doc.reference.delete();
+                }
+                
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text("Doctor removed successfully"), backgroundColor: Colors.green),

@@ -37,70 +37,97 @@ class _ViewRevenuePageState extends State<ViewRevenuePage> {
       final weekStart = todayStart.subtract(Duration(days: now.weekday - 1));
       final monthStart = DateTime(now.year, now.month, 1);
 
-      // Fetch all completed appointments with payment info
-      final allPaymentsSnapshot = await firestore
-          .collection('payments')
-          .orderBy('createdAt', descending: true)
-          .get();
-
       double todayTotal = 0;
       double weekTotal = 0;
       double monthTotal = 0;
       double allTimeTotal = 0;
       List<Map<String, dynamic>> transactions = [];
 
-      for (var doc in allPaymentsSnapshot.docs) {
+      // 1. Fetch registration fees from patients/users
+      final patientsSnapshot = await firestore.collection('patients').get();
+      for (var doc in patientsSnapshot.docs) {
         final data = doc.data();
-        final amount = (data['amount'] ?? 0).toDouble();
+        final fee = (data['registrationFee'] ?? 0).toDouble();
         final createdAt = (data['createdAt'] as Timestamp?)?.toDate();
 
-        allTimeTotal += amount;
+        if (fee > 0) {
+          allTimeTotal += fee;
 
-        if (createdAt != null) {
-          if (createdAt.isAfter(todayStart)) {
-            todayTotal += amount;
-          }
-          if (createdAt.isAfter(weekStart)) {
-            weekTotal += amount;
-          }
-          if (createdAt.isAfter(monthStart)) {
-            monthTotal += amount;
-          }
-        }
+          if (createdAt != null) {
+            if (createdAt.isAfter(todayStart)) todayTotal += fee;
+            if (createdAt.isAfter(weekStart)) weekTotal += fee;
+            if (createdAt.isAfter(monthStart)) monthTotal += fee;
 
-        // Add to recent transactions (limit to 10)
-        if (transactions.length < 10) {
-          String patientName = "Unknown";
-          if (data['patientId'] != null) {
-            final patientDoc = await firestore.collection('patients').doc(data['patientId']).get();
-            if (patientDoc.exists) {
-              patientName = patientDoc.data()?['name'] ?? "Unknown";
+            // Add to transactions
+            if (transactions.length < 10) {
+              transactions.add({
+                'patientName': data['name'] ?? 'Unknown',
+                'amount': fee,
+                'date': createdAt,
+                'type': 'Registration',
+              });
             }
           }
-          transactions.add({
-            'patientName': patientName,
-            'amount': amount,
-            'date': createdAt,
-            'type': data['type'] ?? 'Consultation',
-          });
         }
       }
 
-      // Get appointment stats
-      final appointmentsSnapshot = await firestore.collection('appointments').get();
-      final completedSnapshot = await firestore
+      // 2. Fetch consultation fees from appointments
+      final appointmentsSnapshot = await firestore
           .collection('appointments')
-          .where('status', isEqualTo: 'Completed')
+          .orderBy('createdAt', descending: true)
           .get();
+      
+      int totalAppts = appointmentsSnapshot.docs.length;
+      int completedAppts = 0;
+
+      for (var doc in appointmentsSnapshot.docs) {
+        final data = doc.data();
+        final fee = (data['consultationFee'] ?? 0).toDouble();
+        final createdAt = (data['createdAt'] as Timestamp?)?.toDate();
+        final status = data['status']?.toString() ?? '';
+        
+        if (status == 'Completed') completedAppts++;
+
+        // Skip cancelled appointments - don't count their revenue
+        if (status == 'Cancelled') continue;
+
+        if (fee > 0) {
+          allTimeTotal += fee;
+
+          if (createdAt != null) {
+            if (createdAt.isAfter(todayStart)) todayTotal += fee;
+            if (createdAt.isAfter(weekStart)) weekTotal += fee;
+            if (createdAt.isAfter(monthStart)) monthTotal += fee;
+
+            // Add to transactions
+            if (transactions.length < 10) {
+              transactions.add({
+                'patientName': data['patient_name'] ?? 'Unknown',
+                'amount': fee,
+                'date': createdAt,
+                'type': 'Consultation',
+              });
+            }
+          }
+        }
+      }
+
+      // Sort transactions by date (newest first)
+      transactions.sort((a, b) {
+        final dateA = a['date'] as DateTime?;
+        final dateB = b['date'] as DateTime?;
+        if (dateA == null || dateB == null) return 0;
+        return dateB.compareTo(dateA);
+      });
 
       setState(() {
         _todayRevenue = todayTotal;
         _weeklyRevenue = weekTotal;
         _monthlyRevenue = monthTotal;
         _totalRevenue = allTimeTotal;
-        _totalAppointments = appointmentsSnapshot.docs.length;
-        _completedAppointments = completedSnapshot.docs.length;
-        _recentTransactions = transactions;
+        _totalAppointments = totalAppts;
+        _completedAppointments = completedAppts;
+        _recentTransactions = transactions.take(10).toList();
         _isLoading = false;
       });
     } catch (e) {

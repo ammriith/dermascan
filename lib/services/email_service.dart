@@ -13,8 +13,8 @@ import 'package:mailer/smtp_server.dart';
 class EmailService {
   // ============ CONFIGURE YOUR EMAIL SETTINGS HERE ============
   // Replace these with your actual email credentials
-  static const String _senderEmail = 'your-email@gmail.com'; // Your email
-  static const String _senderPassword = 'your-app-password';  // Gmail App Password (16 chars)
+  static const String _senderEmail = 'amrithpalath@gmail.com'; // Your email
+  static const String _senderPassword = 'zhnk lppg apen revm';  // Gmail App Password (16 chars)
   static const String _senderName = 'DermaScan Clinic';
   
   // Gmail SMTP Server (change if using different provider)
@@ -77,11 +77,84 @@ class EmailService {
         </div>
       ''';
 
+    // Check if credentials are placeholders
+    if (_senderEmail == 'your-email@gmail.com' || _senderPassword == 'your-app-password') {
+      return EmailResult(
+        success: false,
+        message: 'Email credentials not configured. Please set your Gmail and App Password in email_service.dart',
+      );
+    }
+
     try {
       final sendReport = await send(message, _smtpServer);
       return EmailResult(
         success: true,
         message: 'Email sent successfully to $doctorEmail',
+      );
+    } on MailerException catch (e) {
+      return EmailResult(
+        success: false,
+        message: 'Failed to send email: ${e.message}',
+      );
+    } catch (e) {
+      return EmailResult(
+        success: false,
+        message: 'Error: $e',
+      );
+    }
+  }
+
+  /// Send email to patient with login credentials
+  static Future<EmailResult> sendPatientCredentials({
+    required String patientName,
+    required String patientEmail,
+    required String password,
+  }) async {
+    final message = Message()
+      ..from = Address(_senderEmail, _senderName)
+      ..recipients.add(patientEmail)
+      ..subject = 'Welcome to DermaScan - Your Patient Account Credentials'
+      ..html = '''
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="background: linear-gradient(135deg, #4FD1C5 0%, #38B2AC 100%); padding: 30px; border-radius: 15px 15px 0 0; text-align: center;">
+            <h1 style="color: white; margin: 0;">Welcome to DermaScan!</h1>
+          </div>
+          
+          <div style="background: #f8f9fa; padding: 30px; border-radius: 0 0 15px 15px;">
+            <p style="font-size: 16px; color: #333;">Dear <strong>$patientName</strong>,</p>
+            
+            <p style="font-size: 15px; color: #555;">Your patient account has been successfully created. Please use the following credentials to login to the DermaScan app:</p>
+            
+            <div style="background: white; border-radius: 10px; padding: 20px; margin: 20px 0; border-left: 4px solid #4FD1C5;">
+              <p style="margin: 10px 0;"><strong>📧 Email:</strong> <span style="color: #4FD1C5;">$patientEmail</span></p>
+              <p style="margin: 10px 0;"><strong>🔐 Password:</strong> <span style="font-family: monospace; background: #e9ecef; padding: 3px 8px; border-radius: 4px;">$password</span></p>
+            </div>
+            
+            <div style="background: #fff3cd; border-radius: 8px; padding: 15px; margin: 20px 0;">
+              <p style="margin: 0; color: #856404;">
+                <strong>⚠️ Security Notice:</strong><br>
+                Please change your password after your first login.<br>
+                Go to: <strong>Settings → Change Password</strong>
+              </p>
+            </div>
+            
+            <p style="font-size: 14px; color: #666;">If you have any questions, please contact the clinic.</p>
+            
+            <hr style="border: none; border-top: 1px solid #ddd; margin: 25px 0;">
+            
+            <p style="font-size: 13px; color: #888; text-align: center;">
+              Best regards,<br>
+              <strong>DermaScan Clinic Team</strong>
+            </p>
+          </div>
+        </div>
+      ''';
+
+    try {
+      await send(message, _smtpServer);
+      return EmailResult(
+        success: true,
+        message: 'Email sent successfully to $patientEmail',
       );
     } on MailerException catch (e) {
       return EmailResult(

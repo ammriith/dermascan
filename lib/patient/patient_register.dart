@@ -1,5 +1,6 @@
 import 'package:dermascan/login.dart' show LoginPage;
 import 'package:dermascan/services/firebase_auth_service.dart';
+import 'package:dermascan/services/email_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -54,25 +55,128 @@ class _RegisterPageState extends State<RegisterPage> {
 
   void _submitForm() async {
     if (_formKey.currentState!.validate()) {
-      setState(() => _isLoading = true);
-      try {
-        final result = await _authService.registerPatient(
-          email: _emailController.text.trim(),
-          password: _passController.text.isEmpty ? "google_auth_placeholder" : _passController.text,
-          name: _nameController.text.trim(),
-          dateOfBirth: _dateController.text,
-          gender: _selectedGender,
+      // Show payment confirmation dialog
+      _showPaymentConfirmation();
+    }
+  }
+
+  void _showPaymentConfirmation() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        contentPadding: const EdgeInsets.all(24),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: accentColor.withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(Icons.payment_rounded, color: accentColor, size: 48),
+            ),
+            const SizedBox(height: 20),
+            const Text(
+              "Registration Fee",
+              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              "A one-time registration fee is required to complete your account setup.",
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.grey, fontSize: 14),
+            ),
+            const SizedBox(height: 20),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.green.shade50,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.green.shade200),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.currency_rupee_rounded, color: Colors.green.shade700, size: 28),
+                  Text(
+                    "100",
+                    style: TextStyle(
+                      fontSize: 32,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.green.shade700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      side: BorderSide(color: Colors.grey.shade300),
+                    ),
+                    child: const Text("Cancel", style: TextStyle(color: Colors.grey)),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      _processRegistration();
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: accentColor,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    child: const Text("Pay ₹100", style: TextStyle(fontWeight: FontWeight.bold)),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _processRegistration() async {
+    setState(() => _isLoading = true);
+    try {
+      final result = await _authService.registerPatient(
+        email: _emailController.text.trim(),
+        password: _passController.text.isEmpty ? "google_auth_placeholder" : _passController.text,
+        name: _nameController.text.trim(),
+        dateOfBirth: _dateController.text,
+        gender: _selectedGender,
+        registrationFee: 100,
+      );
+
+      if (!mounted) return;
+      if (result['success']) {
+        // Automatically send credentials email in background
+        EmailService.sendPatientCredentials(
+          patientName: _nameController.text.trim(),
+          patientEmail: _emailController.text.trim(),
+          password: _passController.text.isEmpty ? "(Logged in via Google)" : _passController.text,
         );
 
-        if (!mounted) return;
-        if (result['success']) {
-          Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_) => const PatientDashboard()), (route) => false);
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(result['message']), backgroundColor: Colors.red));
-        }
-      } finally {
-        if (mounted) setState(() => _isLoading = false);
+        Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_) => const PatientDashboard()), (route) => false);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(result['message']), backgroundColor: Colors.red));
       }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 

@@ -1,7 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:dermascan/doctor/doctor_slots_page.dart';
 import 'package:dermascan/doctor/patient_reports.dart';
+import 'package:dermascan/doctor/view_feedbacks_page.dart';
+import 'package:dermascan/doctor/doctor_edit_profile.dart';
+import 'package:dermascan/admin/appointments_page.dart';
+import 'package:dermascan/admin/change_password_page.dart';
 
 class DoctorDashboard extends StatefulWidget {
   const DoctorDashboard({super.key});
@@ -41,6 +46,7 @@ class _DoctorDashboardState extends State<DoctorDashboard> {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   
   List<Map<String, dynamic>> _todayAppointmentsList = [];
+  Map<String, dynamic>? _nextPatient;
 
   @override
   void initState() {
@@ -76,19 +82,32 @@ class _DoctorDashboardState extends State<DoctorDashboard> {
       final todayStart = DateTime(today.year, today.month, today.day);
       final todayEnd = todayStart.add(const Duration(days: 1));
       
-      final appointmentsQuery = await _firestore
-          .collection('appointments')
-          .where('doctorId', isEqualTo: userId)
-          .where('appodate', isGreaterThanOrEqualTo: Timestamp.fromDate(todayStart))
-          .where('appodate', isLessThan: Timestamp.fromDate(todayEnd))
-          .orderBy('appodate')
-          .get();
+      // Fetch all appointments and filter on client side to support both field naming conventions
+      final allAppointmentsSnapshot = await _firestore.collection('appointments').get();
       
-      _todayAppointmentsList = appointmentsQuery.docs.map((doc) {
+      // Filter for this doctor's appointments today (support both doctorId and doctor_id)
+      _todayAppointmentsList = allAppointmentsSnapshot.docs.where((doc) {
+        final data = doc.data();
+        final docId = data['doctorId'] ?? data['doctor_id'];
+        final appodate = data['appodate'] as Timestamp?;
+        
+        if (docId != userId) return false;
+        if (appodate == null) return false;
+        
+        final dt = appodate.toDate();
+        return dt.isAfter(todayStart.subtract(const Duration(seconds: 1))) && dt.isBefore(todayEnd);
+      }).map((doc) {
         final data = doc.data();
         data['id'] = doc.id;
         return data;
       }).toList();
+      
+      // Sort by appointment time
+      _todayAppointmentsList.sort((a, b) {
+        final aTime = (a['appodate'] as Timestamp?)?.toDate() ?? DateTime.now();
+        final bTime = (b['appodate'] as Timestamp?)?.toDate() ?? DateTime.now();
+        return aTime.compareTo(bTime);
+      });
       
       _todayAppointments = _todayAppointmentsList.length;
       _completedToday = _todayAppointmentsList.where((a) => a['status'] == 'Completed').length;
@@ -96,15 +115,27 @@ class _DoctorDashboardState extends State<DoctorDashboard> {
         a['status'] == 'Waiting' || a['status'] == 'Booked' || a['status'] == 'In Progress'
       ).length;
       
-      final allAppointments = await _firestore
-          .collection('appointments')
-          .where('doctorId', isEqualTo: userId)
-          .get();
+      // Find next patient (Waiting first, then Booked)
+      final waitingPatients = _todayAppointmentsList.where((a) => a['status'] == 'Waiting').toList();
+      final bookedPatients = _todayAppointmentsList.where((a) => a['status'] == 'Booked').toList();
       
+      if (waitingPatients.isNotEmpty) {
+        _nextPatient = waitingPatients.first;
+      } else if (bookedPatients.isNotEmpty) {
+        _nextPatient = bookedPatients.first;
+      } else {
+        _nextPatient = null;
+      }
+      
+      // Calculate total unique patients
       final uniquePatients = <String>{};
-      for (var doc in allAppointments.docs) {
-        final patientId = doc.data()['patientId'];
-        if (patientId != null) uniquePatients.add(patientId);
+      for (var doc in allAppointmentsSnapshot.docs) {
+        final data = doc.data();
+        final docId = data['doctorId'] ?? data['doctor_id'];
+        final patientId = data['patientId'] ?? data['patient_id'];
+        if (docId == userId && patientId != null) {
+          uniquePatients.add(patientId);
+        }
       }
       _totalPatients = uniquePatients.length;
       
@@ -184,8 +215,11 @@ class _DoctorDashboardState extends State<DoctorDashboard> {
                 index: _selectedNavIndex,
                 children: [
                   _buildHomeTab(),
-                  _buildMyPatientsTab(),
-                  _buildScheduleTab(),
+                  _buildReportsTab(),
+                  AppointmentsPage(
+                    isDoctor: true,
+                    onBackPressed: () => setState(() => _selectedNavIndex = 0),
+                  ), // Doctor's appointments with date filter
                   _buildProfileTab(),
                 ],
               ),
@@ -210,6 +244,7 @@ class _DoctorDashboardState extends State<DoctorDashboard> {
           children: [
             _buildHeader(),
             _buildOverviewCards(),
+            _buildNextPatientCard(),
             _buildTodayAppointmentsCard(),
             _buildQuickActionsGrid(),
             _buildUpcomingAppointments(),
@@ -338,6 +373,126 @@ class _DoctorDashboardState extends State<DoctorDashboard> {
     );
   }
 
+  Widget _buildNextPatientCard() {
+    if (_nextPatient == null) {
+      return Container(
+        margin: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: greenAccent.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: greenAccent.withValues(alpha: 0.3)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: greenAccent.withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(Icons.check_circle_rounded, color: greenAccent, size: 24),
+            ),
+            const SizedBox(width: 14),
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text("No Patients Waiting", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: textPrimary)),
+                  SizedBox(height: 2),
+                  Text("All patients have been attended", style: TextStyle(fontSize: 12, color: textSecondary)),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+    
+    final patientName = _nextPatient!['patientName'] ?? _nextPatient!['patient_name'] ?? 'Unknown';
+    final status = _nextPatient!['status'] ?? 'Waiting';
+    final timeSlot = _nextPatient!['timeSlot'] ?? _nextPatient!['time_slot'] ?? '';
+    final appodate = _nextPatient!['appodate'] as Timestamp?;
+    
+    String timeStr = timeSlot;
+    if (timeStr.isEmpty && appodate != null) {
+      final dt = appodate.toDate();
+      timeStr = '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+    }
+    
+    return Container(
+      margin: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [orangeAccent, orangeAccent.withValues(alpha: 0.8)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: orangeAccent.withValues(alpha: 0.3),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 50,
+            height: 50,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.2),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Center(
+              child: Text(
+                patientName.isNotEmpty ? patientName[0].toUpperCase() : 'P',
+                style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  "NEXT PATIENT",
+                  style: TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  patientName,
+                  style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                  overflow: TextOverflow.ellipsis,
+                ),
+                if (timeStr.isNotEmpty)
+                  Text(
+                    "$timeStr • $status",
+                    style: const TextStyle(color: Colors.white70, fontSize: 12),
+                  ),
+              ],
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Text(
+              status,
+              style: const TextStyle(color: orangeAccent, fontWeight: FontWeight.bold, fontSize: 12),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildTodayAppointmentsCard() {
     return GestureDetector(
       onTap: () => setState(() => _selectedNavIndex = 2),
@@ -417,13 +572,6 @@ class _DoctorDashboardState extends State<DoctorDashboard> {
                 "Reports",
                 Icons.description_rounded,
                 purpleAccent,
-                () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PatientReportsPage())),
-              ),
-              const SizedBox(width: 12),
-              _buildActionTile(
-                "Patients",
-                Icons.people_rounded,
-                pinkAccent,
                 () => setState(() => _selectedNavIndex = 1),
               ),
               const SizedBox(width: 12),
@@ -432,6 +580,20 @@ class _DoctorDashboardState extends State<DoctorDashboard> {
                 Icons.calendar_today_rounded,
                 blueAccent,
                 () => setState(() => _selectedNavIndex = 2),
+              ),
+              const SizedBox(width: 12),
+              _buildActionTile(
+                "Feedbacks",
+                Icons.rate_review_rounded,
+                greenAccent,
+                () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ViewFeedbacksPage(isDoctor: true))),
+              ),
+              const SizedBox(width: 12),
+              _buildActionTile(
+                "Slots",
+                Icons.more_time_rounded,
+                orangeAccent,
+                () => Navigator.push(context, MaterialPageRoute(builder: (_) => const DoctorSlotsPage())),
               ),
             ],
           ),
@@ -571,12 +733,19 @@ class _DoctorDashboardState extends State<DoctorDashboard> {
               children: [
                 Text(patientName, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: textPrimary), overflow: TextOverflow.ellipsis),
                 const SizedBox(height: 4),
-                Row(
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 4,
+                  crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
-                    const Icon(Icons.access_time_rounded, size: 14, color: textSecondary),
-                    const SizedBox(width: 4),
-                    Text(timeStr, style: const TextStyle(fontSize: 12, color: textSecondary)),
-                    const SizedBox(width: 12),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.access_time_rounded, size: 14, color: textSecondary),
+                        const SizedBox(width: 4),
+                        Text(timeStr, style: const TextStyle(fontSize: 12, color: textSecondary)),
+                      ],
+                    ),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                       decoration: BoxDecoration(
@@ -607,278 +776,37 @@ class _DoctorDashboardState extends State<DoctorDashboard> {
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // TAB 1: MY PATIENTS
+  // TAB 1: REPORTS
   // ═══════════════════════════════════════════════════════════════════════════
 
-  Widget _buildMyPatientsTab() {
-    final doctorId = _auth.currentUser?.uid;
-    
-    return Column(
+  Widget _buildReportsTab() {
+    return Stack(
       children: [
-        Container(
-          padding: const EdgeInsets.fromLTRB(24, 20, 24, 16),
-          child: Row(
-            children: [
-              GestureDetector(
-                onTap: () => setState(() => _selectedNavIndex = 0),
-                child: Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: cardColor,
-                    borderRadius: BorderRadius.circular(12),
-                    boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10)],
+        const PatientReportsPage(),
+        // Back button overlay
+        Positioned(
+          top: 10,
+          left: 16,
+          child: GestureDetector(
+            onTap: () {
+              setState(() => _selectedNavIndex = 0);
+            },
+            child: Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: cardColor,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.1),
+                    blurRadius: 10,
+                    offset: const Offset(0, 2),
                   ),
-                  child: const Icon(Icons.arrow_back_ios_new_rounded, size: 18, color: textPrimary),
-                ),
-              ),
-              const SizedBox(width: 16),
-              const Expanded(
-                child: Text("My Patients", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: textPrimary)),
-              ),
-              GestureDetector(
-                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PatientReportsPage())),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: primaryColor,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.description_rounded, size: 16, color: Colors.white),
-                      SizedBox(width: 6),
-                      Text("Reports", style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13)),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        Container(
-          margin: const EdgeInsets.symmetric(horizontal: 24),
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [purpleAccent.withValues(alpha: 0.1), pinkAccent.withValues(alpha: 0.1)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: const Icon(Icons.people_rounded, color: purpleAccent, size: 28),
-              ),
-              const SizedBox(width: 16),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text("$_totalPatients", style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: textPrimary)),
-                  const Text("Total Patients", style: TextStyle(fontSize: 13, color: textSecondary)),
                 ],
               ),
-            ],
+              child: const Icon(Icons.arrow_back_ios_new_rounded, size: 18, color: textPrimary),
+            ),
           ),
-        ),
-        const SizedBox(height: 20),
-        Expanded(
-          child: StreamBuilder<QuerySnapshot>(
-            stream: _firestore
-                .collection('appointments')
-                .where('doctorId', isEqualTo: doctorId)
-                .orderBy('appodate', descending: true)
-                .snapshots(),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator(color: primaryColor));
-              }
-              
-              if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                return Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.person_search_rounded, size: 64, color: Colors.grey.shade300),
-                      const SizedBox(height: 16),
-                      const Text("No Patients Yet", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textPrimary)),
-                      const SizedBox(height: 8),
-                      const Text("Your patients will appear here", style: TextStyle(color: textSecondary)),
-                    ],
-                  ),
-                );
-              }
-              
-              final Map<String, Map<String, dynamic>> uniquePatients = {};
-              for (var doc in snapshot.data!.docs) {
-                final data = doc.data() as Map<String, dynamic>;
-                final patientId = data['patientId'] as String?;
-                final patientName = data['patientName'] as String?;
-                
-                if (patientId != null && !uniquePatients.containsKey(patientId)) {
-                  uniquePatients[patientId] = {
-                    'patientId': patientId,
-                    'patientName': patientName ?? 'Unknown Patient',
-                    'lastVisit': data['appodate'],
-                  };
-                }
-              }
-              
-              final patients = uniquePatients.values.toList();
-              
-              return ListView.builder(
-                padding: const EdgeInsets.fromLTRB(24, 0, 24, 100),
-                itemCount: patients.length,
-                itemBuilder: (ctx, index) {
-                  final patient = patients[index];
-                  final name = patient['patientName'] ?? 'Unknown';
-                  final lastVisit = patient['lastVisit'];
-                  String lastVisitStr = 'N/A';
-                  
-                  if (lastVisit != null && lastVisit is Timestamp) {
-                    final dt = lastVisit.toDate();
-                    lastVisitStr = '${dt.day}/${dt.month}/${dt.year}';
-                  }
-                  
-                  return GestureDetector(
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => PatientReportDetailsPage(
-                          patientId: patient['patientId'],
-                          patientName: name,
-                        ),
-                      ),
-                    ),
-                    child: Container(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: cardColor,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: Colors.grey.shade100),
-                      ),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 50,
-                            height: 50,
-                            decoration: BoxDecoration(
-                              color: primaryColor.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                            child: Center(
-                              child: Text(
-                                name.isNotEmpty ? name[0].toUpperCase() : 'P',
-                                style: const TextStyle(color: primaryColor, fontSize: 20, fontWeight: FontWeight.bold),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 14),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(name, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: textPrimary), overflow: TextOverflow.ellipsis),
-                                const SizedBox(height: 4),
-                                Row(
-                                  children: [
-                                    const Icon(Icons.calendar_today_rounded, size: 14, color: textSecondary),
-                                    const SizedBox(width: 4),
-                                    Text("Last visit: $lastVisitStr", style: const TextStyle(fontSize: 12, color: textSecondary)),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ),
-                          Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: primaryColor.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: const Icon(Icons.description_rounded, size: 18, color: primaryColor),
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                },
-              );
-            },
-          ),
-        ),
-      ],
-    );
-  }
-
-  // ═══════════════════════════════════════════════════════════════════════════
-  // TAB 2: SCHEDULE
-  // ═══════════════════════════════════════════════════════════════════════════
-
-  Widget _buildScheduleTab() {
-    return Column(
-      children: [
-        Container(
-          padding: const EdgeInsets.fromLTRB(24, 20, 24, 16),
-          child: Row(
-            children: [
-              GestureDetector(
-                onTap: () => setState(() => _selectedNavIndex = 0),
-                child: Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: cardColor,
-                    borderRadius: BorderRadius.circular(12),
-                    boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10)],
-                  ),
-                  child: const Icon(Icons.arrow_back_ios_new_rounded, size: 18, color: textPrimary),
-                ),
-              ),
-              const SizedBox(width: 16),
-              const Expanded(
-                child: Text("Today's Schedule", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: textPrimary)),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: primaryColor.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  "$_todayAppointments appointments",
-                  style: const TextStyle(fontSize: 12, color: primaryColor, fontWeight: FontWeight.w600),
-                ),
-              ),
-            ],
-          ),
-        ),
-        Expanded(
-          child: _todayAppointmentsList.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.event_available_rounded, size: 64, color: Colors.grey.shade300),
-                      const SizedBox(height: 16),
-                      const Text("No Appointments", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textPrimary)),
-                      const SizedBox(height: 8),
-                      const Text("You have no appointments scheduled for today", style: TextStyle(color: textSecondary)),
-                    ],
-                  ),
-                )
-              : ListView.builder(
-                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 100),
-                  itemCount: _todayAppointmentsList.length,
-                  itemBuilder: (ctx, index) => _buildAppointmentCard(_todayAppointmentsList[index]),
-                ),
         ),
       ],
     );
@@ -976,10 +904,27 @@ class _DoctorDashboardState extends State<DoctorDashboard> {
         children: [
           const Text("Settings", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: textPrimary)),
           const SizedBox(height: 16),
-          _buildSettingsTile(Icons.person_outline_rounded, "Edit Profile", () {}),
-          _buildSettingsTile(Icons.notifications_outlined, "Notifications", () {}),
-          _buildSettingsTile(Icons.lock_outline_rounded, "Change Password", () {}),
-          _buildSettingsTile(Icons.help_outline_rounded, "Help & Support", () {}),
+          _buildSettingsTile(Icons.person_outline_rounded, "Edit Profile", () async {
+            final result = await Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const DoctorEditProfilePage()),
+            );
+            if (result == true) {
+              _loadDoctorData(); // Refresh profile data
+            }
+          }),
+          _buildSettingsTile(Icons.notifications_outlined, "Notifications", () {
+            _showNotificationSettings();
+          }),
+          _buildSettingsTile(Icons.lock_outline_rounded, "Change Password", () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const ChangePasswordPage()),
+            );
+          }),
+          _buildSettingsTile(Icons.help_outline_rounded, "Help & Support", () {
+            _showHelpSupport();
+          }),
           const SizedBox(height: 16),
           GestureDetector(
             onTap: _logout,
@@ -1001,6 +946,143 @@ class _DoctorDashboardState extends State<DoctorDashboard> {
               ),
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  void _showNotificationSettings() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        padding: const EdgeInsets.all(24),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 20),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const Text("Notification Settings", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: textPrimary)),
+            const SizedBox(height: 20),
+            _buildNotificationToggle("Appointment Reminders", true),
+            _buildNotificationToggle("New Patient Alerts", true),
+            _buildNotificationToggle("Feedback Notifications", true),
+            _buildNotificationToggle("Email Notifications", false),
+            const SizedBox(height: 16),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNotificationToggle(String title, bool defaultValue) {
+    return StatefulBuilder(
+      builder: (context, setLocalState) {
+        bool isEnabled = defaultValue;
+        return Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: Colors.grey.shade50,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(title, style: const TextStyle(fontSize: 15, color: textPrimary)),
+              Switch(
+                value: isEnabled,
+                onChanged: (val) => setLocalState(() => isEnabled = val),
+                activeColor: primaryColor,
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _showHelpSupport() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        padding: const EdgeInsets.all(24),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 20),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const Text("Help & Support", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: textPrimary)),
+            const SizedBox(height: 20),
+            _buildHelpItem(Icons.email_outlined, "Email Support", "support@dermascan.com"),
+            _buildHelpItem(Icons.phone_outlined, "Phone Support", "+91 1234567890"),
+            _buildHelpItem(Icons.help_center_outlined, "FAQ", "Frequently asked questions"),
+            _buildHelpItem(Icons.description_outlined, "Terms of Service", "View terms and conditions"),
+            _buildHelpItem(Icons.privacy_tip_outlined, "Privacy Policy", "View privacy policy"),
+            const SizedBox(height: 16),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHelpItem(IconData icon, String title, String subtitle) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: primaryColor.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, color: primaryColor, size: 22),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: const TextStyle(fontWeight: FontWeight.w600, color: textPrimary)),
+                Text(subtitle, style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+              ],
+            ),
+          ),
+          const Icon(Icons.chevron_right_rounded, color: textSecondary),
         ],
       ),
     );
@@ -1055,7 +1137,7 @@ class _DoctorDashboardState extends State<DoctorDashboard> {
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
           _buildNavItem(Icons.grid_view_rounded, "Home", 0),
-          _buildNavItem(Icons.people_rounded, "Patients", 1),
+          _buildNavItem(Icons.description_rounded, "Reports", 1),
           _buildNavItem(Icons.calendar_today_rounded, "Schedule", 2),
           _buildNavItem(Icons.person_rounded, "Profile", 3),
         ],

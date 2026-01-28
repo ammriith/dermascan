@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:provider/provider.dart';
 import 'package:dermascan/landing_page.dart';
+import 'package:dermascan/admin/change_password_page.dart';
+import 'package:dermascan/providers/theme_provider.dart';
+
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -16,7 +21,6 @@ class _SettingsPageState extends State<SettingsPage> {
   static const Color cardColor = Color(0xFFF3F4F6);
 
   bool _notificationsEnabled = true;
-  bool _darkMode = false;
 
   void _handleLogout() async {
     showDialog(
@@ -53,238 +57,181 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
-  void _showChangePasswordDialog() {
-    final currentPasswordController = TextEditingController();
-    final newPasswordController = TextEditingController();
-    final confirmPasswordController = TextEditingController();
-    final formKey = GlobalKey<FormState>();
-    bool isLoading = false;
-    bool showCurrentPassword = false;
-    bool showNewPassword = false;
-    bool showConfirmPassword = false;
+  void _showChangePasswordPage() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const ChangePasswordPage()),
+    );
+  }
 
+  void _showClearDatabaseDialog() {
+    final confirmController = TextEditingController();
+    bool isDeleting = false;
+    
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (ctx) => StatefulBuilder(
-        builder: (context, setDialogState) => Dialog(
+        builder: (context, setDialogState) => AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Form(
-              key: formKey,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Header
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: accentColor.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: const Icon(Icons.lock_rounded, color: accentColor, size: 24),
-                      ),
-                      const SizedBox(width: 12),
-                      const Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              "Change Password",
-                              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textColor),
-                            ),
-                            Text(
-                              "Update your account password",
-                              style: TextStyle(fontSize: 12, color: Colors.grey),
-                            ),
-                          ],
-                        ),
-                      ),
-                      IconButton(
-                        onPressed: () => Navigator.pop(ctx),
-                        icon: const Icon(Icons.close_rounded, color: Colors.grey),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
-
-                  // Current Password
-                  TextFormField(
-                    controller: currentPasswordController,
-                    obscureText: !showCurrentPassword,
-                    validator: (val) => val!.isEmpty ? "Enter current password" : null,
-                    decoration: InputDecoration(
-                      labelText: "Current Password",
-                      prefixIcon: const Icon(Icons.lock_outline, color: accentColor, size: 20),
-                      suffixIcon: IconButton(
-                        icon: Icon(showCurrentPassword ? Icons.visibility_off : Icons.visibility, size: 20),
-                        onPressed: () => setDialogState(() => showCurrentPassword = !showCurrentPassword),
-                      ),
-                      filled: true,
-                      fillColor: cardColor,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide.none,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  // New Password
-                  TextFormField(
-                    controller: newPasswordController,
-                    obscureText: !showNewPassword,
-                    validator: (val) {
-                      if (val!.isEmpty) return "Enter new password";
-                      if (val.length < 6) return "Password must be at least 6 characters";
-                      return null;
-                    },
-                    decoration: InputDecoration(
-                      labelText: "New Password",
-                      prefixIcon: const Icon(Icons.lock_rounded, color: accentColor, size: 20),
-                      suffixIcon: IconButton(
-                        icon: Icon(showNewPassword ? Icons.visibility_off : Icons.visibility, size: 20),
-                        onPressed: () => setDialogState(() => showNewPassword = !showNewPassword),
-                      ),
-                      filled: true,
-                      fillColor: cardColor,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide.none,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Confirm Password
-                  TextFormField(
-                    controller: confirmPasswordController,
-                    obscureText: !showConfirmPassword,
-                    validator: (val) {
-                      if (val!.isEmpty) return "Confirm your password";
-                      if (val != newPasswordController.text) return "Passwords don't match";
-                      return null;
-                    },
-                    decoration: InputDecoration(
-                      labelText: "Confirm New Password",
-                      prefixIcon: const Icon(Icons.lock_rounded, color: accentColor, size: 20),
-                      suffixIcon: IconButton(
-                        icon: Icon(showConfirmPassword ? Icons.visibility_off : Icons.visibility, size: 20),
-                        onPressed: () => setDialogState(() => showConfirmPassword = !showConfirmPassword),
-                      ),
-                      filled: true,
-                      fillColor: cardColor,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide.none,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-
-                  // Buttons
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: () => Navigator.pop(ctx),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: Colors.grey[600],
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                            side: BorderSide(color: Colors.grey.shade300),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                          ),
-                          child: const Text("Cancel"),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: ElevatedButton(
-                          onPressed: isLoading ? null : () async {
-                            if (!formKey.currentState!.validate()) return;
-
-                            setDialogState(() => isLoading = true);
-
-                            try {
-                              final user = FirebaseAuth.instance.currentUser;
-                              if (user == null || user.email == null) {
-                                throw Exception("User not found");
-                              }
-
-                              // Re-authenticate user
-                              final credential = EmailAuthProvider.credential(
-                                email: user.email!,
-                                password: currentPasswordController.text,
-                              );
-                              await user.reauthenticateWithCredential(credential);
-
-                              // Update password
-                              await user.updatePassword(newPasswordController.text);
-
-                              if (ctx.mounted) {
-                                Navigator.pop(ctx);
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text("Password changed successfully!"),
-                                    backgroundColor: Colors.green,
-                                    behavior: SnackBarBehavior.floating,
-                                  ),
-                                );
-                              }
-                            } on FirebaseAuthException catch (e) {
-                              String message;
-                              switch (e.code) {
-                                case 'wrong-password':
-                                  message = 'Current password is incorrect';
-                                  break;
-                                case 'weak-password':
-                                  message = 'New password is too weak';
-                                  break;
-                                case 'requires-recent-login':
-                                  message = 'Please logout and login again, then try';
-                                  break;
-                                default:
-                                  message = e.message ?? 'Failed to change password';
-                              }
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text(message), backgroundColor: Colors.red),
-                              );
-                            } catch (e) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red),
-                              );
-                            } finally {
-                              setDialogState(() => isLoading = false);
-                            }
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: accentColor,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                          ),
-                          child: isLoading
-                              ? const SizedBox(
-                                  height: 20,
-                                  width: 20,
-                                  child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                                )
-                              : const Text("Update Password", style: TextStyle(fontWeight: FontWeight.bold)),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
+          title: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.red.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.warning_amber_rounded, color: Colors.red, size: 28),
               ),
-            ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Text("Clear All Data", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              ),
+            ],
           ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                "⚠️ WARNING: This will permanently delete:",
+                style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red),
+              ),
+              const SizedBox(height: 12),
+              _buildDeleteItem("All Patients"),
+              _buildDeleteItem("All Doctors"),
+              _buildDeleteItem("All User Accounts"),
+              _buildDeleteItem("All Appointments"),
+              const SizedBox(height: 16),
+              const Text(
+                "Type 'DELETE' to confirm:",
+                style: TextStyle(fontSize: 13, color: Colors.grey),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: confirmController,
+                decoration: InputDecoration(
+                  hintText: "Type DELETE here",
+                  filled: true,
+                  fillColor: Colors.grey.shade100,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+                onChanged: (_) => setDialogState(() {}),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: isDeleting ? null : () => Navigator.pop(ctx),
+              child: Text("Cancel", style: TextStyle(color: Colors.grey[600])),
+            ),
+            ElevatedButton(
+              onPressed: confirmController.text == 'DELETE' && !isDeleting
+                  ? () async {
+                      setDialogState(() => isDeleting = true);
+                      await _clearAllData();
+                      if (mounted) Navigator.pop(ctx);
+                    }
+                  : null,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              child: isDeleting
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                    )
+                  : const Text("Delete All", style: TextStyle(fontWeight: FontWeight.bold)),
+            ),
+          ],
         ),
       ),
     );
+  }
+
+  Widget _buildDeleteItem(String text) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          const Icon(Icons.remove_circle, color: Colors.red, size: 16),
+          const SizedBox(width: 8),
+          Text(text, style: const TextStyle(fontSize: 14)),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _clearAllData() async {
+    final firestore = FirebaseFirestore.instance;
+    
+    try {
+      // Delete all patients
+      final patients = await firestore.collection('patients').get();
+      for (var doc in patients.docs) {
+        await doc.reference.delete();
+      }
+      
+      // Delete all doctors
+      final doctors = await firestore.collection('doctors').get();
+      for (var doc in doctors.docs) {
+        await doc.reference.delete();
+      }
+      
+      // Delete all users (except current admin)
+      final currentUserId = FirebaseAuth.instance.currentUser?.uid;
+      final users = await firestore.collection('users').get();
+      for (var doc in users.docs) {
+        if (doc.id != currentUserId) {
+          await doc.reference.delete();
+        }
+      }
+      
+      // Delete all appointments
+      final appointments = await firestore.collection('appointments').get();
+      for (var doc in appointments.docs) {
+        await doc.reference.delete();
+      }
+      
+      // Delete all scan results
+      final scans = await firestore.collection('scan_results').get();
+      for (var doc in scans.docs) {
+        await doc.reference.delete();
+      }
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.check_circle, color: Colors.white),
+                SizedBox(width: 8),
+                Expanded(child: Text('All data has been cleared successfully!')),
+              ],
+            ),
+            backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error clearing data: $e'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
   }
 
   @override
@@ -355,12 +302,12 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
             const SizedBox(height: 16),
             
-            // Change Password - NEW
+            // Change Password - Navigate to full page
             _buildSettingTile(
               icon: Icons.lock_outline_rounded,
               title: "Change Password",
               subtitle: "Update your account password",
-              onTap: _showChangePasswordDialog,
+              onTap: _showChangePasswordPage,
             ),
             _buildSettingTile(
               icon: Icons.notifications_none_rounded,
@@ -374,10 +321,12 @@ class _SettingsPageState extends State<SettingsPage> {
             _buildSettingTile(
               icon: Icons.dark_mode_outlined,
               title: "Dark Mode",
-              trailing: Switch(
-                value: _darkMode,
-                activeColor: accentColor,
-                onChanged: (val) => setState(() => _darkMode = val),
+              trailing: Consumer<ThemeProvider>(
+                builder: (context, themeProvider, _) => Switch(
+                  value: themeProvider.isDarkMode,
+                  activeColor: accentColor,
+                  onChanged: (val) => themeProvider.setDarkMode(val),
+                ),
               ),
             ),
             _buildSettingTile(
@@ -410,7 +359,36 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
 
             const SizedBox(height: 32),
+            Text(
+              "Database Management",
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.red.withOpacity(0.7)),
+            ),
+            const SizedBox(height: 16),
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.red.withOpacity(0.05),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.red.withOpacity(0.2)),
+              ),
+              child: ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.red.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.delete_forever_rounded, color: Colors.red, size: 20),
+                ),
+                title: const Text("Clear All Data", style: TextStyle(fontWeight: FontWeight.w600, color: Colors.red)),
+                subtitle: Text("Delete all patients, doctors & appointments", style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+                trailing: Icon(Icons.chevron_right_rounded, color: Colors.grey[400]),
+                onTap: _showClearDatabaseDialog,
+              ),
+            ),
+
+            const SizedBox(height: 32),
             // Logout
+
             Container(
               decoration: BoxDecoration(
                 color: Colors.redAccent.withValues(alpha: 0.1),

@@ -19,6 +19,7 @@ class FirebaseAuthService {
     required String dateOfBirth,
     required String gender,
     String? phone,
+    int registrationFee = 0,
   }) async {
     try {
       final UserCredential userCredential =
@@ -36,6 +37,7 @@ class FirebaseAuthService {
         'name': name,
         'phone': phone ?? '',
         'userRole': 'patient',
+        'registrationFee': registrationFee,
         'createdAt': FieldValue.serverTimestamp(),
       });
 
@@ -47,6 +49,7 @@ class FirebaseAuthService {
         'phone': phone ?? '',
         'dateOfBirth': dateOfBirth,
         'gender': gender,
+        'registrationFee': registrationFee,
         'createdAt': FieldValue.serverTimestamp(),
       });
 
@@ -80,7 +83,17 @@ class FirebaseAuthService {
         return {'success': false, 'message': 'User profile not found'};
       }
 
-      final String userRole = userDoc['userRole'] ?? 'patient';
+      String userRole = userDoc['userRole'] ?? 'patient';
+      
+      // Fallback: Check if user is in doctors collection
+      if (userRole == 'patient') {
+        final doctorDoc = await _firestore.collection('doctors').doc(userId).get();
+        if (doctorDoc.exists) {
+          userRole = 'doctor';
+          // Update the users collection with correct role
+          await _firestore.collection('users').doc(userId).update({'userRole': 'doctor'});
+        }
+      }
 
       return {
         'success': true,
