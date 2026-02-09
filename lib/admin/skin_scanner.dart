@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:dermascan/services/ai_service.dart';
 
 class SkinScannerPage extends StatefulWidget {
   final String? patientId;
@@ -42,6 +43,7 @@ class _SkinScannerPageState extends State<SkinScannerPage> with TickerProviderSt
   final ImagePicker _picker = ImagePicker();
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
+  final AIService _aiService = AIService();
 
   File? _selectedImage;
   bool _isAnalyzing = false;
@@ -162,27 +164,10 @@ class _SkinScannerPageState extends State<SkinScannerPage> with TickerProviderSt
     setState(() => _isAnalyzing = true);
     
     try {
-      // Simulated AI analysis delay
-      await Future.delayed(const Duration(seconds: 3));
-      
-      // Simulated predictions
-      final conditions = [
-        {'name': 'Eczema', 'confidence': 0.82, 'severity': 'Moderate'},
-        {'name': 'Psoriasis', 'confidence': 0.12, 'severity': 'Low'},
-        {'name': 'Dermatitis', 'confidence': 0.04, 'severity': 'Low'},
-        {'name': 'Healthy Skin', 'confidence': 0.02, 'severity': 'None'},
-      ];
-      
-      final topResult = conditions.first;
+      final result = await _aiService.analyzeSkinImage(_selectedImage!);
       
       setState(() {
-        _analysisResult = {
-          'condition': topResult['name'],
-          'confidence': topResult['confidence'],
-          'severity': topResult['severity'],
-          'allResults': conditions,
-          'recommendations': _getRecommendations(topResult['name'] as String),
-        };
+        _analysisResult = result;
       });
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -197,35 +182,7 @@ class _SkinScannerPageState extends State<SkinScannerPage> with TickerProviderSt
     }
   }
 
-  List<String> _getRecommendations(String condition) {
-    final Map<String, List<String>> recs = {
-      'Eczema': [
-        'Apply fragrance-free moisturizer daily',
-        'Use lukewarm water for bathing',
-        'Avoid known triggers and allergens',
-        'Consider topical corticosteroids if prescribed',
-      ],
-      'Psoriasis': [
-        'Keep skin well moisturized',
-        'Get moderate sun exposure',
-        'Reduce stress through relaxation',
-        'Follow prescribed treatment plan',
-      ],
-      'Dermatitis': [
-        'Identify and avoid irritants',
-        'Apply cool compresses for relief',
-        'Use gentle, unscented products',
-        'Consult dermatologist for persistent cases',
-      ],
-      'Healthy Skin': [
-        'Continue current skincare routine',
-        'Stay hydrated and eat well',
-        'Use SPF protection daily',
-        'Regular skin self-examinations',
-      ],
-    };
-    return recs[condition] ?? recs['Healthy Skin']!;
-  }
+  // Recommendations and Condition logic moved to AIService
 
   Future<void> _saveResult() async {
     if (_analysisResult == null) return;
@@ -822,10 +779,12 @@ class _SkinScannerPageState extends State<SkinScannerPage> with TickerProviderSt
     final condition = _analysisResult!['condition'] as String;
     final confidence = (_analysisResult!['confidence'] as double) * 100;
     final severity = _analysisResult!['severity'] as String;
+    final description = _analysisResult!['description'] as String? ?? '';
     final recommendations = _analysisResult!['recommendations'] as List<String>;
+    final symptoms = _analysisResult!['symptoms'] as List<String>? ?? [];
     
-    Color severityColor = severity == 'Moderate' ? orangeAccent : 
-                          severity == 'Low' ? greenAccent : redAccent;
+    Color severityColor = severity.toLowerCase().contains('high') || severity.toLowerCase().contains('critical') ? redAccent : 
+                          severity.toLowerCase().contains('moderate') ? orangeAccent : greenAccent;
     
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -861,6 +820,7 @@ class _SkinScannerPageState extends State<SkinScannerPage> with TickerProviderSt
               Text(
                 condition,
                 style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: primaryDark),
+                textAlign: TextAlign.center,
               ),
               const SizedBox(height: 20),
               Row(
@@ -874,11 +834,54 @@ class _SkinScannerPageState extends State<SkinScannerPage> with TickerProviderSt
           ),
         ),
         
-        const SizedBox(height: 20),
+        const SizedBox(height: 24),
+        
+        // About the condition
+        if (description.isNotEmpty) ...[
+          const Text("About the condition", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textPrimary)),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(16),
+            width: double.infinity,
+            decoration: BoxDecoration(
+              color: cardColor,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: Colors.grey.shade100),
+            ),
+            child: Text(
+              description,
+              style: const TextStyle(fontSize: 14, color: textSecondary, height: 1.5),
+            ),
+          ),
+          const SizedBox(height: 24),
+        ],
+
+        // Common Symptoms
+        if (symptoms.isNotEmpty) ...[
+          const Text("Common Symptoms", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textPrimary)),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: symptoms.map((s) => Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              decoration: BoxDecoration(
+                color: blueAccent.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(30),
+                border: Border.all(color: blueAccent.withValues(alpha: 0.2)),
+              ),
+              child: Text(
+                s,
+                style: const TextStyle(fontSize: 13, color: blueAccent, fontWeight: FontWeight.w600),
+              ),
+            )).toList(),
+          ),
+          const SizedBox(height: 24),
+        ],
         
         // Recommendations
         const Text(
-          "Recommendations",
+          "Care Plan & Recommendations",
           style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textPrimary),
         ),
         const SizedBox(height: 12),
@@ -919,7 +922,7 @@ class _SkinScannerPageState extends State<SkinScannerPage> with TickerProviderSt
           ),
         ),
         
-        const SizedBox(height: 24),
+        const SizedBox(height: 32),
         
         // Action buttons
         Row(

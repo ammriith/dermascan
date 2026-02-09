@@ -101,8 +101,13 @@ class _SettingsPageState extends State<SettingsPage> {
               const SizedBox(height: 12),
               _buildDeleteItem("All Patients"),
               _buildDeleteItem("All Doctors"),
-              _buildDeleteItem("All User Accounts"),
+              _buildDeleteItem("All Medical Records"),
               _buildDeleteItem("All Appointments"),
+              const SizedBox(height: 8),
+              const Text(
+                "Note: Login accounts stay in Firebase Auth but will be blocked from access.",
+                style: TextStyle(fontSize: 11, color: Colors.orange, fontWeight: FontWeight.bold),
+              ),
               const SizedBox(height: 16),
               const Text(
                 "Type 'DELETE' to confirm:",
@@ -200,9 +205,15 @@ class _SettingsPageState extends State<SettingsPage> {
         await doc.reference.delete();
       }
       
-      // Delete all scan results
-      final scans = await firestore.collection('scan_results').get();
+      // Delete all scan results (predictions)
+      final scans = await firestore.collection('predictions').get();
       for (var doc in scans.docs) {
+        await doc.reference.delete();
+      }
+
+      // Delete all prescriptions
+      final prescriptions = await firestore.collection('prescriptions').get();
+      for (var doc in prescriptions.docs) {
         await doc.reference.delete();
       }
       

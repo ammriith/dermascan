@@ -516,7 +516,7 @@ class _ViewUsersPageState extends State<ViewUsersPage> with SingleTickerProvider
                   SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      "This will remove the user from the database. This action cannot be undone.",
+                      "This will remove ALL user data (profile, appointments, records). Due to security, their login account will remain in Firebase Auth, but they will be blocked from logging back into this app.",
                       style: TextStyle(fontSize: 12, color: Colors.red),
                     ),
                   ),
@@ -570,13 +570,39 @@ class _ViewUsersPageState extends State<ViewUsersPage> with SingleTickerProvider
         await doc.reference.delete();
       }
       
-      // Also check for doctor's appointments if role is doctor
+      // Delete prescriptions
+      final prescriptions = await firestore
+          .collection('prescriptions')
+          .where('patient_id', isEqualTo: userId)
+          .get();
+      for (var doc in prescriptions.docs) {
+        await doc.reference.delete();
+      }
+
+      // Delete predictions (AI Scans)
+      final predictions = await firestore
+          .collection('predictions')
+          .where('patient_id', isEqualTo: userId)
+          .get();
+      for (var doc in predictions.docs) {
+        await doc.reference.delete();
+      }
+      
+      // Also check for doctor's records if role is doctor
       if (role.toLowerCase() == 'doctor') {
         final doctorAppointments = await firestore
             .collection('appointments')
             .where('doctorId', isEqualTo: userId)
             .get();
         for (var doc in doctorAppointments.docs) {
+          await doc.reference.delete();
+        }
+        
+        final doctorPrescriptions = await firestore
+            .collection('prescriptions')
+            .where('doctor_id', isEqualTo: userId)
+            .get();
+        for (var doc in doctorPrescriptions.docs) {
           await doc.reference.delete();
         }
       }

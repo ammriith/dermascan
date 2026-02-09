@@ -590,6 +590,7 @@ class _PatientDashboardState extends State<PatientDashboard> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      key: const ValueKey('patient_dashboard'),
       backgroundColor: bgColor,
       
       /// 🔹 APP BAR
@@ -653,6 +654,7 @@ class _PatientDashboardState extends State<PatientDashboard> {
             /// 1. BOOK APPOINTMENT
             _dashboardCard(
               title: _t('book_appoint'),
+              key: const ValueKey('book_appointment_button'),
               subtitle: "Schedule a visit with a specialist",
               image: "assets/appointment.jpg",
               icon: Icons.add_task_rounded,
@@ -1175,8 +1177,10 @@ class _PatientDashboardState extends State<PatientDashboard> {
     required String image,
     required IconData icon,
     required VoidCallback onTap,
+    Key? key,
   }) {
     return Container(
+      key: key,
       margin: const EdgeInsets.only(bottom: 20),
       decoration: BoxDecoration(
         color: Colors.white,

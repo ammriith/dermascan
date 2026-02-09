@@ -39,9 +39,12 @@ class _AuthWrapperState extends State<AuthWrapper> {
           _startScreen = const ClinicStaffDashboard();
         } else if (role == 'doctor') {
           _startScreen = const DoctorDashboard();
-        } else {
-          // Default to patient if role is missing or 'patient'
+        } else if (role == 'patient') {
           _startScreen = const PatientDashboard();
+        } else {
+          // If profile is missing (User was removed by admin)
+          await _authService.logout();
+          _startScreen = const LandingPage();
         }
       } else {
         // No user logged in

@@ -157,6 +157,7 @@ class _LoginPageState extends State<LoginPage>{
               const SizedBox(height: 20),
               Text(
                 "Welcome Back",
+                key: const ValueKey('login_title'),
                 style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: textColor),
                 textAlign: TextAlign.center,
               ),
@@ -169,6 +170,7 @@ class _LoginPageState extends State<LoginPage>{
 
               /// EMAIL
               TextFormField(
+                key: const ValueKey('email_field'),
                 controller: _emailController,
                 validator: (value) => (value == null || value.isEmpty) ? "Enter email" : null,
                 decoration: _inputStyle(hint: "Email Address", icon: Icons.mail_outline),
@@ -177,6 +179,7 @@ class _LoginPageState extends State<LoginPage>{
 
               /// PASSWORD
               TextFormField(
+                key: const ValueKey('password_field'),
                 controller: _passwordController,
                 obscureText: _isObscured,
                 validator: (value) => (value == null || value.isEmpty) ? "Enter password" : null,
@@ -205,6 +208,7 @@ class _LoginPageState extends State<LoginPage>{
                   boxShadow: [BoxShadow(color: accentColor.withOpacity(0.3), blurRadius: 15, offset: const Offset(0, 8))],
                 ),
                 child: ElevatedButton(
+                  key: const ValueKey('login_button'),
                   onPressed: _isLoading ? null : _handleLogin,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: accentColor,
@@ -225,6 +229,7 @@ class _LoginPageState extends State<LoginPage>{
                 children: [
                   Text("Don't have an account? ", style: TextStyle(color: Colors.grey[600])),
                   GestureDetector(
+                    key: const ValueKey('signup_button'),
                     onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RegisterPage())),
                     child: Text(
                       "Sign Up",

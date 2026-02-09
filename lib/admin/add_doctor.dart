@@ -1,8 +1,11 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:dermascan/services/email_service.dart';
 
@@ -27,6 +30,17 @@ class _AddDoctorPageState extends State<AddDoctorPage> {
   final TextEditingController _experienceController = TextEditingController();
   final TextEditingController _consultationFeeController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
+  final TextEditingController _licenseNumberController = TextEditingController();
+
+  // Gender selection
+  String _selectedGender = 'Male';
+  final List<String> _genderOptions = ['Male', 'Female', 'Other'];
+
+  // Profile image
+  File? _profileImage;
+  Uint8List? _webImage;
+  final ImagePicker _imagePicker = ImagePicker();
+  bool _isUploadingImage = false;
 
   bool _isLoading = false;
   bool _isEmailSending = false;
@@ -47,13 +61,71 @@ class _AddDoctorPageState extends State<AddDoctorPage> {
     _experienceController.dispose();
     _consultationFeeController.dispose();
     _passwordController.dispose();
+    _licenseNumberController.dispose();
     super.dispose();
+  }
+
+  // Pick profile image
+  Future<void> _pickProfileImage() async {
+    try {
+      final XFile? pickedFile = await _imagePicker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 512,
+        maxHeight: 512,
+        imageQuality: 80,
+      );
+
+      if (pickedFile != null) {
+        if (kIsWeb) {
+          final bytes = await pickedFile.readAsBytes();
+          setState(() {
+            _webImage = bytes;
+          });
+        } else {
+          setState(() {
+            _profileImage = File(pickedFile.path);
+          });
+        }
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error picking image: $e'), backgroundColor: Colors.red),
+      );
+    }
+  }
+
+  // Upload profile image to Firebase Storage
+  Future<String?> _uploadProfileImage(String doctorId) async {
+    try {
+      if (_profileImage == null && _webImage == null) return null;
+
+      setState(() => _isUploadingImage = true);
+
+      final ref = FirebaseStorage.instance
+          .ref()
+          .child('doctor_profiles')
+          .child('$doctorId.jpg');
+
+      if (kIsWeb && _webImage != null) {
+        await ref.putData(_webImage!, SettableMetadata(contentType: 'image/jpeg'));
+      } else if (_profileImage != null) {
+        await ref.putFile(_profileImage!);
+      }
+
+      final downloadUrl = await ref.getDownloadURL();
+      return downloadUrl;
+    } catch (e) {
+      debugPrint('Error uploading profile image: $e');
+      return null;
+    } finally {
+      if (mounted) setState(() => _isUploadingImage = false);
+    }
   }
 
   // Generate password based on doctor name
   String _generatePassword() {
     final name = _nameController.text.trim().split(' ').first.toLowerCase();
-    return "Dr$name@123";
+    return "DR$name@123";
   }
 
   Future<void> _addDoctor() async {
@@ -77,11 +149,17 @@ class _AddDoctorPageState extends State<AddDoctorPage> {
 
       final String doctorId = userCredential.user!.uid;
 
+      // Upload profile image if selected
+      String? profileImageUrl;
+      if (_profileImage != null || _webImage != null) {
+        profileImageUrl = await _uploadProfileImage(doctorId);
+      }
+
       // Store in 'users' collection (for role-based access)
       await FirebaseFirestore.instance.collection('users').doc(doctorId).set({
         'uid': doctorId,
         'email': email,
-        'name': _nameController.text.trim(),
+        'name': "DR. ${_nameController.text.trim()}",
         'userRole': 'doctor',
         'createdAt': FieldValue.serverTimestamp(),
       });
@@ -89,12 +167,15 @@ class _AddDoctorPageState extends State<AddDoctorPage> {
       // Store in 'doctors' collection (profile specific)
       await FirebaseFirestore.instance.collection('doctors').doc(doctorId).set({
         'uid': doctorId,
-        'name': _nameController.text.trim(),
+        'name': "DR. ${_nameController.text.trim()}",
         'email': email,
         'phone': _phoneController.text.trim(),
         'specialization': _specializationController.text.trim(),
-        'experience': int.tryParse(_experienceController.text.trim()) ?? 0,
+        'experience': _experienceController.text.trim().toLowerCase() == 'nil' ? 0 : (int.tryParse(_experienceController.text.trim()) ?? 0),
         'consultationFee': double.tryParse(_consultationFeeController.text.trim()) ?? 0.0,
+        'licenseNumber': _licenseNumberController.text.trim(),
+        'gender': _selectedGender,
+        'profileImageUrl': profileImageUrl,
         'isVerified': true,
         'weeklySchedule': {
           'days': _selectedDays.toList(),
@@ -106,12 +187,13 @@ class _AddDoctorPageState extends State<AddDoctorPage> {
       });
 
       if (mounted) {
+        final fullName = "DR. ${_nameController.text.trim()}";
         // Automatically trigger email sending
-        _sendEmailViaService(_nameController.text.trim(), email, password, isAutomated: true);
+        _sendEmailViaService(fullName, email, password, isAutomated: true);
         
         // Show credentials dialog (it now displays the automated status)
         _showCredentialsDialog(
-          name: _nameController.text.trim(),
+          name: fullName,
           email: email,
           password: password,
           phone: _phoneController.text.trim(),
@@ -158,7 +240,7 @@ class _AddDoctorPageState extends State<AddDoctorPage> {
         "Please change your password after first login.";
     
     final emailSubject = "Your DermaScan Doctor Account Credentials";
-    final emailBody = "Dear Dr. $name,\n\n"
+    final emailBody = "Dear $name,\n\n"
         "Welcome to DermaScan Clinic!\n\n"
         "Your doctor account has been created. Please use the following credentials to login:\n\n"
         "Email: $email\n"
@@ -272,7 +354,7 @@ class _AddDoctorPageState extends State<AddDoctorPage> {
                     ),
                     child: Column(
                       children: [
-                        _buildCredentialRow("Doctor Name", "Dr. $name", Icons.person_rounded),
+                        _buildCredentialRow("Doctor Name", name, Icons.person_rounded),
                         const Divider(height: 16),
                         _buildCredentialRow("Email (Username)", email, Icons.email_rounded, canCopy: true),
                         const Divider(height: 16),
@@ -321,7 +403,7 @@ class _AddDoctorPageState extends State<AddDoctorPage> {
                     width: double.infinity,
                     child: OutlinedButton.icon(
                       onPressed: () {
-                        final credentials = "Doctor Login Credentials\n\nName: Dr. $name\nEmail: $email\nPassword: $password";
+                        final credentials = "Doctor Login Credentials\n\nName: $name\nEmail: $email\nPassword: $password";
                         Clipboard.setData(ClipboardData(text: credentials));
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
@@ -442,7 +524,7 @@ class _AddDoctorPageState extends State<AddDoctorPage> {
       if (!isAutomated) {
         final emailSubject = Uri.encodeComponent("Your DermaScan Doctor Account Credentials");
         final emailBody = Uri.encodeComponent(
-          "Dear Dr. $doctorName,\n\n"
+          "Dear $doctorName,\n\n"
           "Welcome to DermaScan Clinic!\n\n"
           "Your doctor account has been created. Please use the following credentials to login:\n\n"
           "Email: $doctorEmail\n"
@@ -629,23 +711,69 @@ class _AddDoctorPageState extends State<AddDoctorPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Header Icon
+              // Profile Picture Picker
               Center(
-                child: Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: accentColor.withValues(alpha: 0.1),
-                    shape: BoxShape.circle,
+                child: GestureDetector(
+                  onTap: _pickProfileImage,
+                  child: Stack(
+                    children: [
+                      Container(
+                        width: 120,
+                        height: 120,
+                        decoration: BoxDecoration(
+                          color: accentColor.withValues(alpha: 0.1),
+                          shape: BoxShape.circle,
+                          border: Border.all(color: accentColor.withValues(alpha: 0.3), width: 3),
+                          image: _profileImage != null
+                              ? DecorationImage(
+                                  image: FileImage(_profileImage!),
+                                  fit: BoxFit.cover,
+                                )
+                              : _webImage != null
+                                  ? DecorationImage(
+                                      image: MemoryImage(_webImage!),
+                                      fit: BoxFit.cover,
+                                    )
+                                  : null,
+                        ),
+                        child: (_profileImage == null && _webImage == null)
+                            ? const Icon(Icons.person_rounded, size: 60, color: accentColor)
+                            : null,
+                      ),
+                      Positioned(
+                        bottom: 0,
+                        right: 0,
+                        child: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: accentColor,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 2),
+                          ),
+                          child: const Icon(Icons.camera_alt_rounded, size: 18, color: Colors.white),
+                        ),
+                      ),
+                    ],
                   ),
-                  child: const Icon(Icons.person_add_alt_1_rounded, size: 50, color: accentColor),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Center(
+                child: Text(
+                  "Tap to add profile picture",
+                  style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
                 ),
               ),
               const SizedBox(height: 30),
 
-              // Section: Basic Info
-              Text(
-                "Basic Information",
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: textColor.withValues(alpha: 0.7)),
+              // ════════════════════════════════════════════════════════
+              // SECTION 1: BASIC INFORMATION
+              // ════════════════════════════════════════════════════════
+              _buildSectionHeader(
+                icon: Icons.person_rounded,
+                title: "Basic Information",
+                subtitle: "Doctor's personal and professional details",
+                color: Colors.blue,
               ),
               const SizedBox(height: 16),
 
@@ -654,11 +782,102 @@ class _AddDoctorPageState extends State<AddDoctorPage> {
                 controller: _nameController,
                 label: "Full Name",
                 icon: Icons.person_outlined,
+                prefixText: "DR. ",
                 validator: (val) => val!.isEmpty ? "Enter name" : null,
               ),
               const SizedBox(height: 16),
 
-              // Email Field (moved to basic info)
+              // Specialization Field
+              _buildTextField(
+                controller: _specializationController,
+                label: "Specialization",
+                icon: Icons.medical_services_outlined,
+                validator: (v) => v!.isEmpty ? "Specialization is required" : null,
+              ),
+              const SizedBox(height: 16),
+
+              // Experience Field
+              _buildTextField(
+                controller: _experienceController,
+                label: "Experience (Years)",
+                icon: Icons.work_outlined,
+                keyboardType: TextInputType.text,
+                validator: (val) {
+                  if (val == null || val.isEmpty) return "Required";
+                  if (val.trim().toLowerCase() == 'nil') return null;
+                  final n = int.tryParse(val.trim());
+                  if (n == null || n < 0) return "Enter valid experinece'";
+                  return null;
+                },
+              ),
+              const SizedBox(height: 16),
+
+              // License Number Field
+              _buildTextField(
+                controller: _licenseNumberController,
+                label: "License Number",
+                icon: Icons.badge_outlined,
+                keyboardType: TextInputType.number,
+                validator: (val) {
+                  if (val == null || val.isEmpty) return "License number is required";
+                  final n = int.tryParse(val.trim());
+                  if (n == null || n < 0) return "Enter positive number";
+                  return null;
+                },
+              ),
+              const SizedBox(height: 16),
+
+              // Gender Dropdown
+              Container(
+                decoration: BoxDecoration(
+                  color: inputFill,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: DropdownButtonFormField<String>(
+                  value: _selectedGender,
+                  decoration: InputDecoration(
+                    labelText: "Gender",
+                    prefixIcon: const Icon(Icons.person_outline_rounded, color: accentColor),
+                    filled: true,
+                    fillColor: inputFill,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: BorderSide.none,
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: const BorderSide(color: accentColor, width: 2),
+                    ),
+                  ),
+                  items: _genderOptions.map((gender) {
+                    return DropdownMenuItem(
+                      value: gender,
+                      child: Text(gender),
+                    );
+                  }).toList(),
+                  onChanged: (value) {
+                    if (value != null) {
+                      setState(() => _selectedGender = value);
+                    }
+                  },
+                  validator: (val) => val == null ? "Please select gender" : null,
+                ),
+              ),
+
+              const SizedBox(height: 32),
+
+              // ════════════════════════════════════════════════════════
+              // SECTION 2: CONTACT DETAILS
+              // ════════════════════════════════════════════════════════
+              _buildSectionHeader(
+                icon: Icons.contact_mail_rounded,
+                title: "Contact Details",
+                subtitle: "Email and phone for communication",
+                color: Colors.purple,
+              ),
+              const SizedBox(height: 16),
+
+              // Email Field
               _buildTextField(
                 controller: _emailController,
                 label: "Email Address",
@@ -678,48 +897,73 @@ class _AddDoctorPageState extends State<AddDoctorPage> {
                 label: "Phone Number",
                 icon: Icons.phone_outlined,
                 keyboardType: TextInputType.phone,
-                validator: (v) => v!.isEmpty ? "Phone is required" : null,
-              ),
-              const SizedBox(height: 16),
-
-              // Specialization Field
-              _buildTextField(
-                controller: _specializationController,
-                label: "Specialization",
-                icon: Icons.medical_services_outlined,
-                validator: (v) => v!.isEmpty ? "Specialization is required" : null,
-              ),
-              const SizedBox(height: 16),
-
-              Row(
-                children: [
-                  // Experience Field
-                  Expanded(
-                    child: _buildTextField(
-                      controller: _experienceController,
-                      label: "Experience (Years)",
-                      icon: Icons.work_outlined,
-                      keyboardType: TextInputType.number,
-                      validator: (val) => val!.isEmpty ? "Required" : null,
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  // Consultation Fee Field
-                  Expanded(
-                    child: _buildTextField(
-                      controller: _consultationFeeController,
-                      label: "Fee (₹)",
-                      icon: Icons.currency_rupee,
-                      keyboardType: TextInputType.number,
-                      validator: (v) => v!.isEmpty ? "Required" : null,
-                    ),
-                  ),
+                inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                  LengthLimitingTextInputFormatter(10),
                 ],
+                validator: (v) {
+                  if (v!.isEmpty) return "Phone is required";
+                  if (v.length != 10) return "Must be 10 digits";
+                  if (v.startsWith('0') || v.startsWith('1')) return "invalid phone number";
+                  if (!RegExp(r'^[0-9]+$').hasMatch(v)) return "Digits only";
+                  return null;
+                },
               ),
 
+              const SizedBox(height: 32),
 
-              const SizedBox(height: 24),
+              // ════════════════════════════════════════════════════════
+              // SECTION 3: AVAILABILITY & SCHEDULING
+              // ════════════════════════════════════════════════════════
+              _buildSectionHeader(
+                icon: Icons.schedule_rounded,
+                title: "Availability & Scheduling",
+                subtitle: "Working days and hours",
+                color: Colors.orange,
+              ),
+              const SizedBox(height: 16),
+              
               _buildWeeklyScheduleSection(),
+
+              const SizedBox(height: 32),
+
+              // ════════════════════════════════════════════════════════
+              // SECTION 4: CONSULTATION FEE
+              // ════════════════════════════════════════════════════════
+              _buildSectionHeader(
+                icon: Icons.currency_rupee_rounded,
+                title: "Consultation Fee",
+                subtitle: "Fee charged for patient appointments",
+                color: Colors.green,
+              ),
+              const SizedBox(height: 16),
+
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.green.shade50,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.green.shade200),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      "This fee will be displayed when patients book appointments with this doctor.",
+                      style: TextStyle(fontSize: 13, color: Colors.green.shade700),
+                    ),
+                    const SizedBox(height: 12),
+                    _buildTextField(
+                      controller: _consultationFeeController,
+                      label: "Enter Fee Amount (₹)",
+                      icon: Icons.payments_outlined,
+                      keyboardType: TextInputType.number,
+                      validator: (v) => v!.isEmpty ? "Consultation fee is required" : null,
+                    ),
+                  ],
+                ),
+              ),
+
               const SizedBox(height: 24),
               
               // Info box about login credentials
@@ -905,17 +1149,22 @@ class _AddDoctorPageState extends State<AddDoctorPage> {
     String? hint,
     TextInputType keyboardType = TextInputType.text,
     bool isPassword = false,
+    List<TextInputFormatter>? inputFormatters,
     String? Function(String?)? validator,
+    String? prefixText,
   }) {
     return TextFormField(
       controller: controller,
       keyboardType: keyboardType,
       obscureText: isPassword,
+      inputFormatters: inputFormatters,
       validator: validator,
       decoration: InputDecoration(
         labelText: label,
         hintText: hint,
         prefixIcon: Icon(icon, color: accentColor),
+        prefixText: prefixText,
+        prefixStyle: const TextStyle(fontWeight: FontWeight.bold, color: textColor),
         filled: true,
         fillColor: inputFill,
         border: OutlineInputBorder(
@@ -926,6 +1175,62 @@ class _AddDoctorPageState extends State<AddDoctorPage> {
           borderRadius: BorderRadius.circular(16),
           borderSide: const BorderSide(color: accentColor, width: 2),
         ),
+      ),
+    );
+  }
+
+  Widget _buildSectionHeader({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required MaterialColor color,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [color.shade50, color.shade100.withValues(alpha: 0.5)],
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: color.shade200),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: color.shade100,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: color.shade700, size: 24),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: color.shade800,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: color.shade600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

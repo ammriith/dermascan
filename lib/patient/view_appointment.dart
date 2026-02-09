@@ -222,6 +222,8 @@ class _ViewAppointmentPageState extends State<ViewAppointmentPage> {
   }
 
   Widget _buildStats() {
+    final activeAppointmentsCount = _allAppointments.where((a) => a['status'] != 'Cancelled').length;
+    
     return Container(
       margin: const EdgeInsets.fromLTRB(24, 16, 24, 0),
       padding: const EdgeInsets.all(16),
@@ -242,7 +244,7 @@ class _ViewAppointmentPageState extends State<ViewAppointmentPage> {
       ),
       child: Row(
         children: [
-          Expanded(child: _buildStatItem("${_allAppointments.length}", "Total", Icons.calendar_month_rounded)),
+          Expanded(child: _buildStatItem("$activeAppointmentsCount", "Active", Icons.calendar_month_rounded)),
           Container(width: 1, height: 40, color: Colors.white.withValues(alpha: 0.3)),
           Expanded(child: _buildStatItem("${_todayAppointments.length}", "Today", Icons.today_rounded)),
           Container(width: 1, height: 40, color: Colors.white.withValues(alpha: 0.3)),

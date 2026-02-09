@@ -71,6 +71,7 @@ class _DoctorDashboardState extends State<DoctorDashboard> {
       final userId = _auth.currentUser?.uid;
       if (userId == null) return;
       
+      // Fetch Doctor profile
       final doctorDoc = await _firestore.collection('doctors').doc(userId).get();
       if (doctorDoc.exists) {
         final data = doctorDoc.data()!;
@@ -82,22 +83,27 @@ class _DoctorDashboardState extends State<DoctorDashboard> {
       final todayStart = DateTime(today.year, today.month, today.day);
       final todayEnd = todayStart.add(const Duration(days: 1));
       
-      // Fetch all appointments and filter on client side to support both field naming conventions
-      final allAppointmentsSnapshot = await _firestore.collection('appointments').get();
+      // Optimize: Fetch ONLY this doctor's appointments instead of the entire collection
+      // Fetch both variations in parallel
+      final snapshots = await Future.wait([
+        _firestore.collection('appointments').where('doctorId', isEqualTo: userId).get(),
+        _firestore.collection('appointments').where('doctor_id', isEqualTo: userId).get(),
+      ]);
       
-      // Filter for this doctor's appointments today (support both doctorId and doctor_id)
-      _todayAppointmentsList = allAppointmentsSnapshot.docs.where((doc) {
-        final data = doc.data();
-        final docId = data['doctorId'] ?? data['doctor_id'];
+      final allDoctorDocs = [...snapshots[0].docs, ...snapshots[1].docs];
+      final seenIds = <String>{};
+      final uniqueDoctorDocs = allDoctorDocs.where((doc) => seenIds.add(doc.id)).toList();
+      
+      // Filter for today's appointments
+      _todayAppointmentsList = uniqueDoctorDocs.where((doc) {
+        final data = doc.data() as Map<String, dynamic>;
         final appodate = data['appodate'] as Timestamp?;
-        
-        if (docId != userId) return false;
         if (appodate == null) return false;
         
         final dt = appodate.toDate();
         return dt.isAfter(todayStart.subtract(const Duration(seconds: 1))) && dt.isBefore(todayEnd);
       }).map((doc) {
-        final data = doc.data();
+        final data = doc.data() as Map<String, dynamic>;
         data['id'] = doc.id;
         return data;
       }).toList();
@@ -127,13 +133,12 @@ class _DoctorDashboardState extends State<DoctorDashboard> {
         _nextPatient = null;
       }
       
-      // Calculate total unique patients
+      // Calculate total unique patients for this doctor
       final uniquePatients = <String>{};
-      for (var doc in allAppointmentsSnapshot.docs) {
-        final data = doc.data();
-        final docId = data['doctorId'] ?? data['doctor_id'];
+      for (var doc in uniqueDoctorDocs) {
+        final data = doc.data() as Map<String, dynamic>;
         final patientId = data['patientId'] ?? data['patient_id'];
-        if (docId == userId && patientId != null) {
+        if (patientId != null) {
           uniquePatients.add(patientId);
         }
       }
@@ -421,8 +426,9 @@ class _DoctorDashboardState extends State<DoctorDashboard> {
     }
     
     return Container(
-      margin: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+      margin: const EdgeInsets.fromLTRB(24, 12, 24, 0),
       padding: const EdgeInsets.all(16),
+      key: const ValueKey('next_patient_card'),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [orangeAccent, orangeAccent.withValues(alpha: 0.8)],
@@ -461,6 +467,7 @@ class _DoctorDashboardState extends State<DoctorDashboard> {
               children: [
                 const Text(
                   "NEXT PATIENT",
+                  key: const ValueKey('next_patient_label'),
                   style: TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1),
                 ),
                 const SizedBox(height: 4),
@@ -469,25 +476,14 @@ class _DoctorDashboardState extends State<DoctorDashboard> {
                   style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
                   overflow: TextOverflow.ellipsis,
                 ),
-                if (timeStr.isNotEmpty)
                   Text(
-                    "$timeStr • $status",
+                    timeStr,
                     style: const TextStyle(color: Colors.white70, fontSize: 12),
                   ),
               ],
             ),
           ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Text(
-              status,
-              style: const TextStyle(color: orangeAccent, fontWeight: FontWeight.bold, fontSize: 12),
-            ),
-          ),
+          // Removed Status badge as requested
         ],
       ),
     );
@@ -629,7 +625,7 @@ class _DoctorDashboardState extends State<DoctorDashboard> {
   Widget _buildUpcomingAppointments() {
     final upcoming = _todayAppointmentsList.where((a) => 
       a['status'] == 'Waiting' || a['status'] == 'Booked' || a['status'] == 'In Progress'
-    ).take(3).toList();
+    ).take(10).toList(); // Show more patients
     
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 24, 24, 0),

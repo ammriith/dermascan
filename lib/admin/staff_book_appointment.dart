@@ -25,9 +25,13 @@ class _StaffBookAppointmentPageState extends State<StaffBookAppointmentPage> {
   String? _selectedPatientPhone;
   String? _selectedDoctorId;
   String? _selectedDoctorName;
+  double _selectedDoctorFee = 0.0; // Will be updated when doctor is selected
   DateTime _selectedDate = DateTime.now();
   String? _selectedTimeSlot;
   bool _isLoading = false;
+
+  // Doctor's working days (1=Mon, 7=Sun)
+  List<int> _doctorWorkDays = [];
 
   // Time slots available for booking (dynamically populated based on doctor's schedule)
   final List<String> _timeSlots = [];
@@ -73,22 +77,41 @@ class _StaffBookAppointmentPageState extends State<StaffBookAppointmentPage> {
         generatedSlots = slots.map((s) => s.toString()).toList();
         debugPrint("Staff Booking: Using MANUAL OVERRIDE for date $dateStr");
       } else if (weeklySchedule != null) {
-        // Explicitly cast days to List<int> for proper comparison
-        final List<int> workDays = (weeklySchedule['days'] as List<dynamic>?)
-            ?.map((d) => d is int ? d : int.tryParse(d.toString()) ?? 0)
-            .toList() ?? [];
+        // 1. Map weekday index to name
+        final dayMap = {1: 'monday', 2: 'tuesday', 3: 'wednesday', 4: 'thursday', 5: 'friday', 6: 'saturday', 7: 'sunday'};
+        final dayName = dayMap[weekday];
         
-        debugPrint("Staff Booking: weekday=$weekday (${['', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][weekday]}), workDays=$workDays, match=${workDays.contains(weekday)}");
-        
-        if (workDays.contains(weekday)) {
-          final String startTimeStr = weeklySchedule['startTime'] ?? '10:00';
-          final String endTimeStr = weeklySchedule['endTime'] ?? '16:00';
-          final int duration = weeklySchedule['slotDuration'] ?? 20;
-          debugPrint("Staff Booking: Generating slots from $startTimeStr to $endTimeStr ($duration min)");
-          generatedSlots = _generateTimeSlots(startTimeStr, endTimeStr, duration);
+        // 2. Check for per-day schedule first
+        if (weeklySchedule.containsKey('perDay') && dayName != null) {
+          final perDay = weeklySchedule['perDay'] as Map<String, dynamic>;
+          if (perDay.containsKey(dayName)) {
+            final dayData = perDay[dayName] as Map<String, dynamic>;
+            if (dayData['isEnabled'] == true) {
+              final String startTimeStr = dayData['startTime'] ?? '10:00';
+              final String endTimeStr = dayData['endTime'] ?? '16:00';
+              final int duration = weeklySchedule['slotDuration'] ?? 20;
+              debugPrint("Staff Booking: Using PER-DAY schedule for $dayName: $startTimeStr-$endTimeStr");
+              generatedSlots = _generateTimeSlots(startTimeStr, endTimeStr, duration);
+            } else {
+              debugPrint("Staff Booking: Day $dayName is DISABLED in per-day schedule");
+              generatedSlots = [];
+            }
+          }
         } else {
-          debugPrint("Staff Booking: Doctor not working on this day");
-          generatedSlots = [];
+          // Fallback to legacy format
+          final List<int> workDays = (weeklySchedule['days'] as List<dynamic>?)
+              ?.map((d) => d is int ? d : int.tryParse(d.toString()) ?? 0)
+              .toList() ?? [];
+          
+          if (workDays.contains(weekday)) {
+            final String startTimeStr = weeklySchedule['startTime'] ?? '10:00';
+            final String endTimeStr = weeklySchedule['endTime'] ?? '16:00';
+            final int duration = weeklySchedule['slotDuration'] ?? 20;
+            generatedSlots = _generateTimeSlots(startTimeStr, endTimeStr, duration);
+          } else {
+            debugPrint("Staff Booking: Doctor not working on this day (legacy check)");
+            generatedSlots = [];
+          }
         }
       } else {
         // Fallback: standard slots for legacy doctors without weeklySchedule
@@ -96,22 +119,37 @@ class _StaffBookAppointmentPageState extends State<StaffBookAppointmentPage> {
         generatedSlots = _generateTimeSlots('10:00', '16:00', 20);
       }
 
-      // 3. Fetch booked slots
-      final snapshot = await _firestore
-          .collection('appointments')
-          .where('doctor_id', isEqualTo: _selectedDoctorId)
-          .where('appodate', isGreaterThanOrEqualTo: Timestamp.fromDate(dateOnly))
-          .where('appodate', isLessThan: Timestamp.fromDate(tomorrow))
-          .get();
+      // 3. Fetch booked slots - check both field naming variations
+      final snapshots = await Future.wait([
+        _firestore.collection('appointments').where('doctorId', isEqualTo: _selectedDoctorId).get(),
+        _firestore.collection('appointments').where('doctor_id', isEqualTo: _selectedDoctorId).get(),
+      ]);
+
+      final allBookedDocs = [...snapshots[0].docs, ...snapshots[1].docs];
+      final dateOnlyTimestamp = Timestamp.fromDate(dateOnly);
+      final tomorrowTimestamp = Timestamp.fromDate(tomorrow);
 
       setState(() {
         _timeSlots.clear();
         _timeSlots.addAll(generatedSlots);
         
-        _bookedSlots = snapshot.docs
-            .map((doc) => doc.data()['time_slot'] as String? ?? '')
-            .where((slot) => slot.isNotEmpty)
-            .toList();
+        _bookedSlots = allBookedDocs.where((doc) {
+          final data = doc.data() as Map<String, dynamic>;
+          final appodate = data['appodate'] as Timestamp?;
+          final status = data['status'] as String? ?? 'Booked';
+
+          if (appodate == null) return false;
+          
+          // ONLY count as booked if NOT cancelled
+          if (status == 'Cancelled') return false;
+
+          return appodate.compareTo(dateOnlyTimestamp) >= 0 && 
+                 appodate.compareTo(tomorrowTimestamp) < 0;
+        }).map((doc) {
+          final data = doc.data() as Map<String, dynamic>;
+          return data['timeSlot'] as String? ?? data['time_slot'] as String? ?? '';
+        }).where((slot) => slot.isNotEmpty)
+          .toList();
 
         // Sanitize selection
         if (_selectedTimeSlot != null && !_timeSlots.contains(_selectedTimeSlot)) {
@@ -178,41 +216,18 @@ class _StaffBookAppointmentPageState extends State<StaffBookAppointmentPage> {
                 color: accentColor.withOpacity(0.1),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.payment_rounded, color: accentColor, size: 48),
+              child: const Icon(Icons.event_available_rounded, color: accentColor, size: 48),
             ),
             const SizedBox(height: 20),
             const Text(
-              "Consultation Fee",
+              "Confirm Appointment",
               style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: textColor),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 12),
             Text(
-              "Patient: $_selectedPatientName\nDoctor: Dr. $_selectedDoctorName",
+              "Book appointment for $_selectedPatientName with Dr. $_selectedDoctorName?",
               textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
-            ),
-            const SizedBox(height: 20),
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.green.shade50,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.green.shade200),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.currency_rupee_rounded, color: Colors.green.shade700, size: 28),
-                  Text(
-                    "400",
-                    style: TextStyle(
-                      fontSize: 32,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.green.shade700,
-                    ),
-                  ),
-                ],
-              ),
+              style: TextStyle(color: Colors.grey.shade600, fontSize: 14, height: 1.4),
             ),
             const SizedBox(height: 24),
             Row(
@@ -231,6 +246,7 @@ class _StaffBookAppointmentPageState extends State<StaffBookAppointmentPage> {
                 const SizedBox(width: 12),
                 Expanded(
                   child: ElevatedButton(
+                    key: const ValueKey('submit_staff_booking'),
                     onPressed: () {
                       Navigator.pop(ctx);
                       _processBooking();
@@ -241,7 +257,7 @@ class _StaffBookAppointmentPageState extends State<StaffBookAppointmentPage> {
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
-                    child: const Text("Pay ₹400", style: TextStyle(fontWeight: FontWeight.bold)),
+                    child: const Text("Confirm", style: TextStyle(fontWeight: FontWeight.bold)),
                   ),
                 ),
               ],
@@ -269,15 +285,15 @@ class _StaffBookAppointmentPageState extends State<StaffBookAppointmentPage> {
 
       // 2. Create Appointment with consultation fee
       await _firestore.collection('appointments').add({
-        'patient_id': _selectedPatientId,
-        'doctor_id': _selectedDoctorId,
-        'doctor_name': _selectedDoctorName,
-        'patient_name': _selectedPatientName,
+        'patientId': _selectedPatientId,
+        'doctorId': _selectedDoctorId,
+        'doctorName': _selectedDoctorName,
+        'patientName': _selectedPatientName,
         'appodate': Timestamp.fromDate(dateOnly),
-        'time_slot': _selectedTimeSlot,
+        'timeSlot': _selectedTimeSlot,
         'tokenno': nextToken,
         'status': 'Booked',
-        'consultationFee': 400,
+        'consultationFee': _selectedDoctorFee,
         'createdAt': FieldValue.serverTimestamp(),
       });
 
@@ -510,6 +526,11 @@ class _StaffBookAppointmentPageState extends State<StaffBookAppointmentPage> {
       initialDate: _selectedDate,
       firstDate: DateTime.now(),
       lastDate: DateTime.now().add(const Duration(days: 30)),
+      selectableDayPredicate: (DateTime date) {
+        // If doctor has working days defined, only allow those days
+        if (_doctorWorkDays.isEmpty) return true;
+        return _doctorWorkDays.contains(date.weekday);
+      },
       builder: (context, child) => Theme(
         data: Theme.of(context).copyWith(colorScheme: const ColorScheme.light(primary: accentColor)),
         child: child!,
@@ -652,10 +673,13 @@ class _StaffBookAppointmentPageState extends State<StaffBookAppointmentPage> {
                     _selectedDate.month == now.month && 
                     _selectedDate.day == now.day;
     
+    int slotIndex = 0;
     return Wrap(
       spacing: 10,
       runSpacing: 10,
+      key: const ValueKey('time_slots_grid'),
       children: _timeSlots.map((slot) {
+        final currentSlotIndex = slotIndex++;
         final isBooked = _bookedSlots.contains(slot);
         final isSelected = _selectedTimeSlot == slot;
         
@@ -675,6 +699,7 @@ class _StaffBookAppointmentPageState extends State<StaffBookAppointmentPage> {
         final isUnavailable = isBooked || isPast;
         
         return GestureDetector(
+          key: ValueKey('slot_$currentSlotIndex'),
           onTap: isUnavailable ? null : () {
             setState(() => _selectedTimeSlot = slot);
           },
@@ -756,11 +781,15 @@ class _StaffBookAppointmentPageState extends State<StaffBookAppointmentPage> {
           decoration: BoxDecoration(color: inputFill, borderRadius: BorderRadius.circular(12)),
           child: DropdownButtonHideUnderline(
             child: DropdownButton<String>(
+              key: const ValueKey('select_patient_dropdown'),
               hint: const Text("Choose Patient"),
               value: _selectedPatientId,
               isExpanded: true,
-              items: items.map((doc) {
+              items: items.asMap().entries.map((entry) {
+                int idx = entry.key;
+                var doc = entry.value;
                 return DropdownMenuItem(
+                  key: ValueKey('patient_option_$idx'),
                   value: doc.id,
                   child: Text(doc['name'] ?? 'Unknown'),
                 );
@@ -792,20 +821,75 @@ class _StaffBookAppointmentPageState extends State<StaffBookAppointmentPage> {
           decoration: BoxDecoration(color: inputFill, borderRadius: BorderRadius.circular(12)),
           child: DropdownButtonHideUnderline(
             child: DropdownButton<String>(
+              key: const ValueKey('select_doctor_dropdown'),
               hint: const Text("Choose Doctor"),
               value: _selectedDoctorId,
               isExpanded: true,
-              items: items.map((doc) {
+              items: items.asMap().entries.map((entry) {
+                int idx = entry.key;
+                var doc = entry.value;
+                final data = doc.data() as Map<String, dynamic>;
+                final fee = (data['consultationFee'] ?? 0).toDouble();
                 return DropdownMenuItem(
+                  key: ValueKey('doctor_option_$idx'),
                   value: doc.id,
-                  child: Text("Dr. ${doc['name']} (${doc['specialization']})"),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text("Dr. ${doc['name']} (${doc['specialization']})"),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: Colors.green.shade50,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          "₹${fee.toStringAsFixed(0)}",
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.green.shade700,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 );
               }).toList(),
               onChanged: (val) {
+                final selectedDoc = items.firstWhere((d) => d.id == val);
+                
+                // Get doctor's working days from their schedule
+                final weeklySchedule = selectedDoc['weeklySchedule'] as Map<String, dynamic>?;
+                List<int> workDays = [];
+                if (weeklySchedule != null && weeklySchedule['days'] != null) {
+                  workDays = (weeklySchedule['days'] as List)
+                      .map((d) => d is int ? d : int.tryParse(d.toString()) ?? 0)
+                      .toList();
+                }
+                
+                // Get doctor's consultation fee
+                final doctorData = selectedDoc.data() as Map<String, dynamic>;
+                final consultationFee = (doctorData['consultationFee'] ?? 0.0).toDouble();
+                
                 setState(() {
                   _selectedDoctorId = val;
-                  _selectedDoctorName = items.firstWhere((d) => d.id == val)['name'];
-                  _selectedTimeSlot = null; // Reset time slot when doctor changes
+                  _selectedDoctorName = selectedDoc['name'];
+                  _selectedDoctorFee = consultationFee;
+                  _selectedTimeSlot = null;
+                  _doctorWorkDays = workDays;
+                  
+                  // Auto-select first available working day
+                  if (workDays.isNotEmpty) {
+                    for (int i = 0; i < 30; i++) {
+                      final date = DateTime.now().add(Duration(days: i));
+                      if (workDays.contains(date.weekday)) {
+                        _selectedDate = date;
+                        break;
+                      }
+                    }
+                  }
                 });
                 _loadBookedSlots();
               },

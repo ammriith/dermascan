@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:intl/intl.dart';
 
 class DoctorSlotsPage extends StatefulWidget {
   const DoctorSlotsPage({super.key});
@@ -10,7 +9,45 @@ class DoctorSlotsPage extends StatefulWidget {
   State<DoctorSlotsPage> createState() => _DoctorSlotsPageState();
 }
 
-class _DoctorSlotsPageState extends State<DoctorSlotsPage> {
+class DaySchedule {
+  bool isEnabled;
+  TimeOfDay startTime;
+  TimeOfDay endTime;
+
+  DaySchedule({
+    this.isEnabled = false,
+    this.startTime = const TimeOfDay(hour: 10, minute: 0),
+    this.endTime = const TimeOfDay(hour: 16, minute: 0),
+  });
+
+  Map<String, dynamic> toMap() {
+    return {
+      'isEnabled': isEnabled,
+      'startTime': '${startTime.hour.toString().padLeft(2, '0')}:${startTime.minute.toString().padLeft(2, '0')}',
+      'endTime': '${endTime.hour.toString().padLeft(2, '0')}:${endTime.minute.toString().padLeft(2, '0')}',
+    };
+  }
+
+  factory DaySchedule.fromMap(Map<String, dynamic> map) {
+    final start = (map['startTime'] as String?)?.split(':') ?? ['10', '0'];
+    final end = (map['endTime'] as String?)?.split(':') ?? ['16', '0'];
+    return DaySchedule(
+      isEnabled: map['isEnabled'] ?? false,
+      startTime: TimeOfDay(hour: int.parse(start[0]), minute: int.parse(start[1])),
+      endTime: TimeOfDay(hour: int.parse(end[0]), minute: int.parse(end[1])),
+    );
+  }
+
+  int get totalSlots {
+    if (!isEnabled) return 0;
+    final startMinutes = startTime.hour * 60 + startTime.minute;
+    final endMinutes = endTime.hour * 60 + endTime.minute;
+    if (endMinutes <= startMinutes) return 0;
+    return ((endMinutes - startMinutes) / 20).floor();
+  }
+}
+
+class _DoctorSlotsPageState extends State<DoctorSlotsPage> with SingleTickerProviderStateMixin {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
@@ -22,492 +59,576 @@ class _DoctorSlotsPageState extends State<DoctorSlotsPage> {
   static const Color textPrimary = Color(0xFF1F2937);
   static const Color textSecondary = Color(0xFF6B7280);
 
-  DateTime _selectedDate = DateTime.now();
   bool _isLoading = false;
   bool _isSaving = false;
+  late AnimationController _animController;
+  late Animation<double> _fadeAnimation;
 
-  // Weekly Schedule State
-  Set<int> _selectedDays = {1, 2, 3, 4, 5};
-  TimeOfDay _startTime = const TimeOfDay(hour: 10, minute: 0);
-  TimeOfDay _endTime = const TimeOfDay(hour: 16, minute: 0);
+  // Day-wise Schedule
+  final Map<String, DaySchedule> _daySchedules = {
+    'monday': DaySchedule(isEnabled: true),
+    'tuesday': DaySchedule(isEnabled: true),
+    'wednesday': DaySchedule(isEnabled: true),
+    'thursday': DaySchedule(isEnabled: true),
+    'friday': DaySchedule(isEnabled: true),
+    'saturday': DaySchedule(isEnabled: false),
+    'sunday': DaySchedule(isEnabled: false),
+  };
 
-  // Standard time slots (for visualization only in Daily tab)
-  final List<String> _allTimeSlots = [
-    "10:00 AM", "10:30 AM", "11:00 AM", "11:30 AM",
-    "12:00 PM", "12:30 PM", "01:00 PM", "01:30 PM",
-    "02:00 PM", "02:30 PM", "03:00 PM", "03:30 PM",
+  final List<Map<String, dynamic>> _weekdays = [
+    {'key': 'monday', 'name': 'Mon', 'fullName': 'Monday', 'color': Colors.blue},
+    {'key': 'tuesday', 'name': 'Tue', 'fullName': 'Tuesday', 'color': Colors.purple},
+    {'key': 'wednesday', 'name': 'Wed', 'fullName': 'Wednesday', 'color': Colors.orange},
+    {'key': 'thursday', 'name': 'Thu', 'fullName': 'Thursday', 'color': Colors.teal},
+    {'key': 'friday', 'name': 'Fri', 'fullName': 'Friday', 'color': Colors.indigo},
+    {'key': 'saturday', 'name': 'Sat', 'fullName': 'Saturday', 'color': Colors.pink},
+    {'key': 'sunday', 'name': 'Sun', 'fullName': 'Sunday', 'color': Colors.red},
   ];
-
-  Set<String> _enabledSlots = {};
 
   @override
   void initState() {
     super.initState();
-    _loadAllData();
+    _animController = AnimationController(
+      duration: const Duration(milliseconds: 800),
+      vsync: this,
+    );
+    _fadeAnimation = CurvedAnimation(parent: _animController, curve: Curves.easeOut);
+    _loadWeeklySchedule();
   }
 
-  Future<void> _loadAllData() async {
-    final user = _auth.currentUser;
-    if (user == null) return;
-    
-    setState(() => _isLoading = true);
-    await Future.wait([
-      _loadAvailability(),
-      _loadWeeklySchedule(),
-    ]);
-    setState(() => _isLoading = false);
+  @override
+  void dispose() {
+    _animController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadWeeklySchedule() async {
     final user = _auth.currentUser;
+    if (user == null) return;
+    
+    setState(() => _isLoading = true);
     try {
-      final doc = await _firestore.collection('doctors').doc(user!.uid).get();
+      final doc = await _firestore.collection('doctors').doc(user.uid).get();
       final schedule = doc.data()?['weeklySchedule'] as Map<String, dynamic>?;
+      
       if (schedule != null) {
-        setState(() {
-          _selectedDays = (schedule['days'] as List).cast<int>().toSet();
-          final start = schedule['startTime'].split(':');
-          final end = schedule['endTime'].split(':');
-          _startTime = TimeOfDay(hour: int.parse(start[0]), minute: int.parse(start[1]));
-          _endTime = TimeOfDay(hour: int.parse(end[0]), minute: int.parse(end[1]));
-        });
+        // Check if it's the new format (per-day schedule)
+        if (schedule.containsKey('monday') || schedule.containsKey('perDay')) {
+          final perDay = schedule['perDay'] as Map<String, dynamic>? ?? schedule;
+          for (var day in _daySchedules.keys) {
+            if (perDay.containsKey(day)) {
+              _daySchedules[day] = DaySchedule.fromMap(perDay[day] as Map<String, dynamic>);
+            }
+          }
+        } else {
+          // Legacy format - convert to new format
+          final days = (schedule['days'] as List?)?.cast<int>() ?? [];
+          final start = (schedule['startTime'] as String?)?.split(':') ?? ['10', '0'];
+          final end = (schedule['endTime'] as String?)?.split(':') ?? ['16', '0'];
+          final startTime = TimeOfDay(hour: int.parse(start[0]), minute: int.parse(start[1]));
+          final endTime = TimeOfDay(hour: int.parse(end[0]), minute: int.parse(end[1]));
+          
+          // Map day indices to day names
+          final dayMap = {1: 'monday', 2: 'tuesday', 3: 'wednesday', 4: 'thursday', 5: 'friday', 6: 'saturday', 7: 'sunday'};
+          for (var entry in _daySchedules.entries) {
+            final dayIndex = dayMap.entries.firstWhere((e) => e.value == entry.key).key;
+            _daySchedules[entry.key] = DaySchedule(
+              isEnabled: days.contains(dayIndex),
+              startTime: startTime,
+              endTime: endTime,
+            );
+          }
+        }
       }
+      _animController.forward();
     } catch (e) {
       debugPrint('Error loading weekly schedule: $e');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
   Future<void> _saveWeeklySchedule() async {
     final user = _auth.currentUser;
     if (user == null) return;
+    
+    final enabledDays = _daySchedules.entries.where((e) => e.value.isEnabled).toList();
+    if (enabledDays.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Please enable at least one working day"), backgroundColor: Colors.orange),
+      );
+      return;
+    }
+    
     setState(() => _isSaving = true);
     try {
+      // Build per-day schedule map
+      final perDaySchedule = <String, dynamic>{};
+      for (var entry in _daySchedules.entries) {
+        perDaySchedule[entry.key] = entry.value.toMap();
+      }
+      
+      // Also maintain legacy format for compatibility
+      final dayIndices = <int>[];
+      final dayMap = {'monday': 1, 'tuesday': 2, 'wednesday': 3, 'thursday': 4, 'friday': 5, 'saturday': 6, 'sunday': 7};
+      for (var entry in _daySchedules.entries) {
+        if (entry.value.isEnabled) {
+          dayIndices.add(dayMap[entry.key]!);
+        }
+      }
+      
       await _firestore.collection('doctors').doc(user.uid).update({
         'weeklySchedule': {
-          'days': _selectedDays.toList(),
-          'startTime': '${_startTime.hour.toString().padLeft(2, '0')}:${_startTime.minute.toString().padLeft(2, '0')}',
-          'endTime': '${_endTime.hour.toString().padLeft(2, '0')}:${_endTime.minute.toString().padLeft(2, '0')}',
+          'perDay': perDaySchedule,
+          'days': dayIndices..sort(), // Legacy compatibility
           'slotDuration': 20,
         }
       });
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Weekly schedule updated! (20min slots)"), backgroundColor: Colors.green));
-      }
-    } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red));
-    } finally {
-      if (mounted) setState(() => _isSaving = false);
-    }
-  }
-
-  String get _dateStr => DateFormat('yyyy-MM-dd').format(_selectedDate);
-
-  Future<void> _loadAvailability() async {
-    final user = _auth.currentUser;
-    if (user == null) return;
-
-    setState(() => _isLoading = true);
-
-    try {
-      final doc = await _firestore
-          .collection('doctors')
-          .doc(user.uid)
-          .collection('availability')
-          .doc(_dateStr)
-          .get();
-
-      if (doc.exists && doc.data()?['slots'] != null) {
-        final List<dynamic> slots = doc.data()!['slots'];
-        setState(() {
-          _enabledSlots = slots.map((s) => s.toString()).toSet();
-        });
-      } else {
-        // Default to all slots if none set yet
-        setState(() {
-          _enabledSlots = _allTimeSlots.toSet();
-        });
-      }
-    } catch (e) {
-      debugPrint('Error loading availability: $e');
-    } finally {
-      setState(() => _isLoading = false);
-    }
-  }
-
-  Future<void> _saveAvailability() async {
-    final user = _auth.currentUser;
-    if (user == null) return;
-
-    setState(() => _isSaving = true);
-
-    try {
-      await _firestore
-          .collection('doctors')
-          .doc(user.uid)
-          .collection('availability')
-          .doc(_dateStr)
-          .set({
-        'date': _dateStr,
-        'slots': _enabledSlots.toList(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("Availability saved successfully!"),
-            backgroundColor: Colors.green,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-    } catch (e) {
+      
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text("Error saving: $e"),
-            backgroundColor: Colors.red,
+            content: Row(
+              children: const [
+                Icon(Icons.check_circle_rounded, color: Colors.white),
+                SizedBox(width: 12),
+                Text("Schedule saved successfully!"),
+              ],
+            ),
+            backgroundColor: Colors.green,
             behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red),
         );
       }
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
+  }
+
+  int get _totalWeeklySlots {
+    return _daySchedules.values.fold(0, (total, day) => total + day.totalSlots);
+  }
+
+  int get _enabledDaysCount {
+    return _daySchedules.values.where((d) => d.isEnabled).length;
   }
 
   @override
   Widget build(BuildContext context) {
-    return DefaultTabController(
-      length: 2,
-      child: Scaffold(
-        backgroundColor: bgColor,
-        appBar: AppBar(
-          title: const Text("My Availability", style: TextStyle(fontWeight: FontWeight.bold)),
-          backgroundColor: Colors.white,
-          foregroundColor: textPrimary,
-          elevation: 0,
-          bottom: const TabBar(
-            labelColor: primaryColor,
-            unselectedLabelColor: textSecondary,
-            indicatorColor: primaryColor,
-            tabs: [
-              Tab(text: "Daily Overrides"),
-              Tab(text: "Weekly Template"),
+    return Scaffold(
+      backgroundColor: bgColor,
+      body: _isLoading 
+        ? const Center(child: CircularProgressIndicator(color: primaryColor))
+        : CustomScrollView(
+            slivers: [
+              // Custom App Bar with Gradient
+              SliverAppBar(
+                expandedHeight: 160,
+                floating: false,
+                pinned: true,
+                backgroundColor: primaryColor,
+                leading: IconButton(
+                  icon: const Icon(Icons.arrow_back_ios_rounded, color: Colors.white),
+                  onPressed: () => Navigator.pop(context),
+                ),
+                flexibleSpace: FlexibleSpaceBar(
+                  background: Container(
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [primaryDark, primaryColor, Color(0xFF81E6D9)],
+                      ),
+                    ),
+                    child: SafeArea(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const SizedBox(height: 10),
+                          Container(
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withAlpha(40),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(Icons.calendar_month_rounded, size: 36, color: Colors.white),
+                          ),
+                          const SizedBox(height: 10),
+                          const Text(
+                            "My Availability",
+                            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            "Set different timings for each day",
+                            style: TextStyle(fontSize: 13, color: Colors.white.withAlpha(200)),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              
+              // Content
+              SliverToBoxAdapter(
+                child: FadeTransition(
+                  opacity: _fadeAnimation,
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Summary Card
+                        _buildSummaryCard(),
+                        const SizedBox(height: 20),
+                        
+                        // Day-wise Schedule Cards
+                        ..._weekdays.map((day) => Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: _buildDayScheduleCard(day),
+                        )),
+                        
+                        const SizedBox(height: 8),
+                        
+                        // Info Box
+                        _buildInfoBox(),
+                        const SizedBox(height: 24),
+                        
+                        // Save Button
+                        _buildSaveButton(),
+                        const SizedBox(height: 20),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
             ],
           ),
+    );
+  }
+
+  Widget _buildSummaryCard() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [primaryColor.withAlpha(25), primaryDark.withAlpha(15)],
         ),
-        body: TabBarView(
-          children: [
-            // Tab 1: Daily Overrides
-            Column(
-              children: [
-                _buildDateSelector(),
-                Expanded(
-                  child: _isLoading
-                      ? const Center(child: CircularProgressIndicator(color: primaryColor))
-                      : _buildSlotsGrid(),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: primaryColor.withAlpha(50)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: [
+          _buildSummaryItem(
+            icon: Icons.calendar_today_rounded,
+            value: "$_enabledDaysCount",
+            label: "Working Days",
+            color: Colors.blue,
+          ),
+          Container(height: 50, width: 1, color: Colors.grey.shade300),
+          _buildSummaryItem(
+            icon: Icons.event_available_rounded,
+            value: "$_totalWeeklySlots",
+            label: "Weekly Slots",
+            color: Colors.green,
+          ),
+          Container(height: 50, width: 1, color: Colors.grey.shade300),
+          _buildSummaryItem(
+            icon: Icons.timer_outlined,
+            value: "20",
+            label: "Min/Slot",
+            color: Colors.orange,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSummaryItem({
+    required IconData icon,
+    required String value,
+    required String label,
+    required Color color,
+  }) {
+    return Column(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: color.withAlpha(25),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(icon, size: 20, color: color),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          value,
+          style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: textPrimary),
+        ),
+        Text(
+          label,
+          style: const TextStyle(fontSize: 10, color: textSecondary),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDayScheduleCard(Map<String, dynamic> dayInfo) {
+    final String dayKey = dayInfo['key'];
+    final String fullName = dayInfo['fullName'];
+    final Color color = dayInfo['color'];
+    final DaySchedule schedule = _daySchedules[dayKey]!;
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 300),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: schedule.isEnabled ? cardColor : Colors.grey.shade100,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: schedule.isEnabled ? color.withAlpha(100) : Colors.grey.shade300,
+          width: schedule.isEnabled ? 2 : 1,
+        ),
+        boxShadow: schedule.isEnabled
+            ? [BoxShadow(color: color.withAlpha(30), blurRadius: 12, offset: const Offset(0, 4))]
+            : null,
+      ),
+      child: Column(
+        children: [
+          // Day Header Row
+          Row(
+            children: [
+              // Day icon and name
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: schedule.isEnabled ? color.withAlpha(25) : Colors.grey.shade200,
+                  borderRadius: BorderRadius.circular(10),
                 ),
-                _buildBottomBar(label: "Save for this Date", onTap: _saveAvailability),
+                child: Icon(
+                  Icons.calendar_today_rounded,
+                  size: 20,
+                  color: schedule.isEnabled ? color : Colors.grey,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      fullName,
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: schedule.isEnabled ? textPrimary : Colors.grey,
+                      ),
+                    ),
+                    if (schedule.isEnabled)
+                      Text(
+                        "${schedule.totalSlots} slots available",
+                        style: TextStyle(fontSize: 12, color: color),
+                      )
+                    else
+                      const Text(
+                        "Day off",
+                        style: TextStyle(fontSize: 12, color: textSecondary),
+                      ),
+                  ],
+                ),
+              ),
+              // Toggle Switch
+              Transform.scale(
+                scale: 0.9,
+                child: Switch(
+                  value: schedule.isEnabled,
+                  onChanged: (value) {
+                    setState(() {
+                      _daySchedules[dayKey]!.isEnabled = value;
+                    });
+                  },
+                  activeColor: color,
+                  activeTrackColor: color.withAlpha(100),
+                ),
+              ),
+            ],
+          ),
+          
+          // Time Selectors (only if enabled)
+          if (schedule.isEnabled) ...[
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: _buildCompactTimePicker(
+                    label: "Start",
+                    time: schedule.startTime,
+                    color: Colors.green,
+                    onTap: () => _selectTime(dayKey, true),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: Icon(Icons.arrow_forward_rounded, size: 20, color: Colors.grey.shade400),
+                ),
+                Expanded(
+                  child: _buildCompactTimePicker(
+                    label: "End",
+                    time: schedule.endTime,
+                    color: Colors.red,
+                    onTap: () => _selectTime(dayKey, false),
+                  ),
+                ),
               ],
             ),
-            // Tab 2: Weekly Template
-            _isLoading 
-              ? const Center(child: CircularProgressIndicator(color: primaryColor))
-              : _buildWeeklyTemplateTab(),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCompactTimePicker({
+    required String label,
+    required TimeOfDay time,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: color.withAlpha(15),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: color.withAlpha(50)),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              label == "Start" ? Icons.play_circle_outline : Icons.stop_circle_outlined,
+              size: 18,
+              color: color,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              time.format(context),
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.bold,
+                color: color,
+              ),
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildWeeklyTemplateTab() {
-    final List<String> weekdays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _buildInfoBox(
-            "Quick Tip", 
-            "Changes here affect your general availability. You can still block specific dates in the 'Daily' tab.",
-            Colors.blue,
+  Future<void> _selectTime(String dayKey, bool isStart) async {
+    final schedule = _daySchedules[dayKey]!;
+    final initialTime = isStart ? schedule.startTime : schedule.endTime;
+    
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: initialTime,
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.light(primary: primaryColor),
           ),
-          const SizedBox(height: 24),
-          const Text("Default Working Days", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            children: List.generate(7, (index) {
-              final dayIndex = index + 1;
-              final isSelected = _selectedDays.contains(dayIndex);
-              return FilterChip(
-                label: Text(weekdays[index]),
-                selected: isSelected,
-                onSelected: (val) => setState(() => val ? _selectedDays.add(dayIndex) : _selectedDays.remove(dayIndex)),
-                selectedColor: primaryColor,
-                checkmarkColor: Colors.white,
-                labelStyle: TextStyle(color: isSelected ? Colors.white : textPrimary),
-              );
-            }),
-          ),
-          const SizedBox(height: 32),
-          const Text("Default Shift Window", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(child: _buildTimePicker("Starts", _startTime, (t) => setState(() => _startTime = t))),
-              const SizedBox(width: 16),
-              Expanded(child: _buildTimePicker("Ends", _endTime, (t) => setState(() => _endTime = t))),
-            ],
-          ),
-          const SizedBox(height: 24),
-          const Center(
-            child: Text(
-              "Appointments will be booked in 20-minute intervals.",
-              style: TextStyle(fontStyle: FontStyle.italic, color: textSecondary, fontSize: 12),
-            ),
-          ),
-          const SizedBox(height: 40),
-          _buildBottomBar(label: "Update Weekly Schedule", onTap: _saveWeeklySchedule),
-        ],
-      ),
+          child: child!,
+        );
+      },
     );
+    
+    if (picked != null) {
+      setState(() {
+        if (isStart) {
+          _daySchedules[dayKey]!.startTime = picked;
+        } else {
+          _daySchedules[dayKey]!.endTime = picked;
+        }
+      });
+    }
   }
 
-  Widget _buildTimePicker(String label, TimeOfDay time, Function(TimeOfDay) onSelected) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: const TextStyle(fontSize: 12, color: textSecondary)),
-        const SizedBox(height: 8),
-        InkWell(
-          onTap: () async {
-            final picked = await showTimePicker(context: context, initialTime: time);
-            if (picked != null) onSelected(picked);
-          },
-          child: Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.grey.shade300)),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(time.format(context), style: const TextStyle(fontWeight: FontWeight.bold)),
-                const Icon(Icons.access_time, size: 20, color: primaryColor),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildInfoBox(String title, String message, Color color) {
+  Widget _buildInfoBox() {
     return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: color.withAlpha(25), borderRadius: BorderRadius.circular(15), border: Border.all(color: color.withAlpha(50))),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.blue.shade50,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.blue.shade200),
+      ),
       child: Row(
         children: [
-          Icon(Icons.info_outline, color: color),
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.blue.shade100,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(Icons.lightbulb_rounded, size: 18, color: Colors.blue.shade700),
+          ),
           const SizedBox(width: 12),
-          Expanded(child: Text(message, style: TextStyle(fontSize: 12, color: color))),
+          Expanded(
+            child: Text(
+              "Set different working hours for each day. Toggle days on/off and adjust timings as needed.",
+              style: TextStyle(fontSize: 12, color: Colors.blue.shade700),
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildDateSelector() {
+  Widget _buildSaveButton() {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 16),
-      color: Colors.white,
-      child: Column(
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              IconButton(
-                icon: const Icon(Icons.chevron_left, color: primaryColor),
-                onPressed: () {
-                  setState(() {
-                    _selectedDate = _selectedDate.subtract(const Duration(days: 1));
-                  });
-                  _loadAvailability();
-                },
-              ),
-              GestureDetector(
-                onTap: () async {
-                  final picked = await showDatePicker(
-                    context: context,
-                    initialDate: _selectedDate,
-                    firstDate: DateTime.now(),
-                    lastDate: DateTime.now().add(const Duration(days: 90)),
-                  );
-                  if (picked != null) {
-                    setState(() => _selectedDate = picked);
-                    _loadAvailability();
-                  }
-                },
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: primaryColor.withAlpha(25),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    DateFormat('EEEE, MMM dd').format(_selectedDate),
-                    style: const TextStyle(fontWeight: FontWeight.bold, color: primaryDark),
-                  ),
-                ),
-              ),
-              IconButton(
-                icon: const Icon(Icons.chevron_right, color: primaryColor),
-                onPressed: () {
-                  setState(() {
-                    _selectedDate = _selectedDate.add(const Duration(days: 1));
-                  });
-                  _loadAvailability();
-                },
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            "Toggle slots you are available for this day",
-            style: TextStyle(fontSize: 12, color: textSecondary),
-          ),
+      width: double.infinity,
+      height: 56,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        gradient: const LinearGradient(colors: [primaryDark, primaryColor]),
+        boxShadow: [
+          BoxShadow(color: primaryColor.withAlpha(100), blurRadius: 16, offset: const Offset(0, 6)),
         ],
       ),
-    );
-  }
-
-  Widget _buildSlotsGrid() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                "Time Slots",
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textPrimary),
-              ),
-              Row(
+      child: ElevatedButton(
+        onPressed: _isSaving ? null : _saveWeeklySchedule,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.transparent,
+          shadowColor: Colors.transparent,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        ),
+        child: _isSaving
+            ? const SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),
+              )
+            : const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                   TextButton(
-                    onPressed: () {
-                      setState(() {
-                        _enabledSlots = _allTimeSlots.toSet();
-                      });
-                    },
-                    child: const Text("Select All", style: TextStyle(color: primaryColor, fontSize: 13)),
-                  ),
-                  TextButton(
-                    onPressed: () {
-                      setState(() {
-                        _enabledSlots.clear();
-                      });
-                    },
-                    child: const Text("Clear All", style: TextStyle(color: Colors.red, fontSize: 13)),
+                  Icon(Icons.save_rounded, color: Colors.white),
+                  SizedBox(width: 10),
+                  Text(
+                    "Save Schedule",
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
                   ),
                 ],
               ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            children: _allTimeSlots.map((slot) {
-              final isEnabled = _enabledSlots.contains(slot);
-              return GestureDetector(
-                onTap: () {
-                  setState(() {
-                    if (isEnabled) {
-                      _enabledSlots.remove(slot);
-                    } else {
-                      _enabledSlots.add(slot);
-                    }
-                  });
-                },
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  decoration: BoxDecoration(
-                    color: isEnabled ? primaryColor : Colors.white,
-                    borderRadius: BorderRadius.circular(15),
-                    border: Border.all(
-                      color: isEnabled ? primaryColor : Colors.grey.shade300,
-                      width: 1.5,
-                    ),
-                    boxShadow: isEnabled
-                        ? [BoxShadow(color: primaryColor.withAlpha(76), blurRadius: 8, offset: const Offset(0, 4))]
-                        : null,
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        isEnabled ? Icons.check_circle : Icons.circle_outlined,
-                        size: 18,
-                        color: isEnabled ? Colors.white : Colors.grey.shade400,
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        slot,
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: isEnabled ? Colors.white : textPrimary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            }).toList(),
-          ),
-          const SizedBox(height: 40),
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.orange.shade50,
-              borderRadius: BorderRadius.circular(15),
-              border: Border.all(color: Colors.orange.shade200),
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.info_outline, color: Colors.orange.shade700),
-                const SizedBox(width: 12),
-                const Expanded(
-                  child: Text(
-                    "Note: Disabling a slot will prevent patients from booking it for this specific date.",
-                    style: TextStyle(fontSize: 12, color: Color(0xFF9A6E00)),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildBottomBar({required String label, required VoidCallback onTap}) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 24),
-      child: ElevatedButton(
-        onPressed: _isSaving ? null : onTap,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: primaryColor,
-          foregroundColor: Colors.white,
-          minimumSize: const Size(double.infinity, 56),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          elevation: 0,
-        ),
-        child: _isSaving
-            ? const CircularProgressIndicator(color: Colors.white)
-            : Text(label, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
       ),
     );
   }

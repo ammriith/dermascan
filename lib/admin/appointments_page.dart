@@ -33,10 +33,11 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
 
   DateTime _selectedDate = DateTime.now();
   String _selectedFilter = 'All';
-  final List<String> _filters = ['All', 'Booked', 'Waiting', 'In Progress', 'Completed', 'Cancelled'];
+  final List<String> _filters = ['All', 'Booked', 'Cancelled'];
   
   List<Map<String, dynamic>> _appointments = [];
   bool _isLoading = true;
+  bool _viewingAllDates = false; // Add this
   int _newAppointmentsCount = 0;
 
   @override
@@ -46,44 +47,62 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
   }
 
   Future<void> _loadAppointments() async {
+    if (!mounted) return;
     setState(() => _isLoading = true);
     
     try {
+      final userId = _auth.currentUser?.uid;
       final dateStart = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day);
       final dateEnd = dateStart.add(const Duration(days: 1));
       
-      Query query = _firestore.collection('appointments');
+      List<QueryDocumentSnapshot> allDocs = [];
       
-      // Fetch all appointments first, then filter on client side
-      // This handles both 'doctorId' and 'doctor_id' field names
-      
-      final snapshot = await query.get();
-      
-      // Filter by date on client side to avoid index issues
-      _appointments = snapshot.docs.where((doc) {
-        final data = doc.data() as Map<String, dynamic>;
-        final timestamp = data['appodate'] as Timestamp?;
-        if (timestamp != null) {
-          final dt = timestamp.toDate();
-          return dt.isAfter(dateStart.subtract(const Duration(seconds: 1))) && 
-                 dt.isBefore(dateEnd);
+      if (widget.isDoctor) {
+        if (userId != null) {
+          // Fetch both variations in parallel to catch all appointments
+          final results = await Future.wait([
+            _firestore.collection('appointments').where('doctorId', isEqualTo: userId).get(),
+            _firestore.collection('appointments').where('doctor_id', isEqualTo: userId).get(),
+          ]);
+          
+          allDocs = [...results[0].docs, ...results[1].docs];
+          
+          // Remove duplicates (by document ID)
+          final seenIds = <String>{};
+          allDocs = allDocs.where((doc) => seenIds.add(doc.id)).toList();
         }
-        return false;
+      } else {
+        // Admin/Staff View - Use server-side filtering by date if not viewing all
+        // We know this index exists because the today's schedule page uses it
+        Query query = _firestore.collection('appointments');
+        if (!_viewingAllDates) {
+          query = query.where('appodate', isGreaterThanOrEqualTo: Timestamp.fromDate(dateStart))
+                       .where('appodate', isLessThan: Timestamp.fromDate(dateEnd));
+        }
+        final snapshot = await query.get();
+        allDocs = snapshot.docs;
+      }
+
+      // Final client-side filtering and mapping
+      _appointments = allDocs.where((doc) {
+        final data = doc.data() as Map<String, dynamic>;
+        
+        // Date filter is only needed on client side for doctors (to avoid index issues)
+        // or if _viewingAllDates is true (show everything)
+        if (!_viewingAllDates && widget.isDoctor) {
+          final timestamp = data['appodate'] as Timestamp?;
+          if (timestamp == null) return false;
+          final dt = timestamp.toDate();
+          // Compare only dates (year-month-day) or use range
+          if (dt.isBefore(dateStart) || !dt.isBefore(dateEnd)) return false;
+        }
+        
+        return true;
       }).map((doc) {
         final data = doc.data() as Map<String, dynamic>;
         data['id'] = doc.id;
         return data;
       }).toList();
-      
-      // If doctor, filter by their ID (supporting both field names)
-      if (widget.isDoctor) {
-        final userId = _auth.currentUser?.uid;
-        if (userId != null) {
-          _appointments = _appointments.where((a) =>
-            a['doctorId'] == userId || a['doctor_id'] == userId
-          ).toList();
-        }
-      }
       
       // Sort by time
       _appointments.sort((a, b) {
@@ -98,7 +117,7 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
     } catch (e) {
       debugPrint('Error loading appointments: $e');
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -148,7 +167,7 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: redAccent.withValues(alpha: 0.1),
+                color: redAccent.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(10),
               ),
               child: const Icon(Icons.cancel_rounded, color: redAccent, size: 24),
@@ -263,9 +282,25 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
   }
 
   Widget _buildNextPatientCard() {
+    // Determine the relevant appointments for the 'Next Patient' alert.
+    // If viewing all dates, we only consider TODAY's patients to avoid confusion.
+    // If a specific date is selected, we consider that day's patients.
+    final now = DateTime.now();
+    final todayStart = DateTime(now.year, now.month, now.day);
+    final todayEnd = todayStart.add(const Duration(days: 1));
+
+    final relevantAppointments = _viewingAllDates
+        ? _appointments.where((a) {
+            final ts = a['appodate'] as Timestamp?;
+            if (ts == null) return false;
+            final dt = ts.toDate();
+            return dt.isAfter(todayStart.subtract(const Duration(seconds: 1))) && dt.isBefore(todayEnd);
+          }).toList()
+        : _appointments;
+
     // Find next patient: prioritize "Waiting", then "Booked"
-    final waitingAppointments = _appointments.where((a) => a['status'] == 'Waiting').toList();
-    final bookedAppointments = _appointments.where((a) => a['status'] == 'Booked').toList();
+    final waitingAppointments = relevantAppointments.where((a) => a['status'] == 'Waiting').toList();
+    final bookedAppointments = relevantAppointments.where((a) => a['status'] == 'Booked').toList();
     
     Map<String, dynamic>? nextPatient;
     if (waitingAppointments.isNotEmpty) {
@@ -381,7 +416,7 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
         color: cardColor,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
+            color: Colors.black.withOpacity(0.04),
             blurRadius: 10,
             offset: const Offset(0, 2),
           ),
@@ -417,12 +452,46 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
                   style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: textPrimary),
                 ),
                 Text(
-                  DateFormat('EEEE, MMMM dd, yyyy').format(_selectedDate),
+                  _viewingAllDates ? "All Dates" : DateFormat('EEEE, MMMM dd, yyyy').format(_selectedDate),
+                  key: const ValueKey('date_range_label'),
                   style: const TextStyle(fontSize: 12, color: textSecondary),
                 ),
               ],
             ),
           ),
+          // Calendar Picker Button
+          GestureDetector(
+            onTap: () async {
+              final picked = await showDatePicker(
+                context: context,
+                initialDate: _selectedDate,
+                firstDate: DateTime(2000),
+                lastDate: DateTime(2100),
+                builder: (context, child) => Theme(
+                  data: Theme.of(context).copyWith(
+                    colorScheme: const ColorScheme.light(primary: primaryColor),
+                  ),
+                  child: child!,
+                ),
+              );
+              if (picked != null) {
+                setState(() {
+                  _selectedDate = picked;
+                  _viewingAllDates = false;
+                });
+                _loadAppointments();
+              }
+            },
+            child: Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: primaryColor.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(Icons.calendar_month_rounded, size: 20, color: primaryColor),
+            ),
+          ),
+          const SizedBox(width: 8),
           if (_newAppointmentsCount > 0)
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -453,19 +522,47 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            "Select Date",
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: textPrimary),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                "Select Date",
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: textPrimary),
+              ),
+              // Show All Toggle
+              GestureDetector(
+                key: const ValueKey('toggle_all_dates'),
+                onTap: () {
+                  setState(() => _viewingAllDates = !_viewingAllDates);
+                  _loadAppointments();
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: _viewingAllDates ? primaryColor : Colors.grey.shade100,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    "Show All Dates",
+                    style: TextStyle(
+                      fontSize: 11, 
+                      fontWeight: FontWeight.bold, 
+                      color: _viewingAllDates ? Colors.white : textSecondary
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 12),
           SizedBox(
             height: 80,
             child: ListView.builder(
               scrollDirection: Axis.horizontal,
-              itemCount: 14, // Show last 7 days and next 7 days
+              itemCount: 365, // Show a full year
               itemBuilder: (ctx, index) {
-                // Show from -3 days to +10 days
-                final date = DateTime.now().add(Duration(days: index - 3));
+                // Show from -30 days to +335 days
+                final date = DateTime.now().add(Duration(days: index - 30));
                 final isSelected = _selectedDate.day == date.day && 
                                    _selectedDate.month == date.month && 
                                    _selectedDate.year == date.year;
@@ -475,7 +572,10 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
                 
                 return GestureDetector(
                   onTap: () {
-                    setState(() => _selectedDate = date);
+                    setState(() {
+                      _selectedDate = date;
+                      _viewingAllDates = false;
+                    });
                     _loadAppointments();
                   },
                   child: AnimatedContainer(
@@ -483,17 +583,17 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
                     width: 58,
                     margin: const EdgeInsets.only(right: 10),
                     decoration: BoxDecoration(
-                      gradient: isSelected
+                      gradient: isSelected && !_viewingAllDates
                           ? const LinearGradient(colors: [primaryColor, primaryDark])
                           : null,
-                      color: isSelected ? null : cardColor,
+                      color: isSelected && !_viewingAllDates ? null : cardColor,
                       borderRadius: BorderRadius.circular(14),
                       border: Border.all(
-                        color: isSelected ? primaryColor : (isToday ? orangeAccent : Colors.grey.shade200),
+                        color: isSelected && !_viewingAllDates ? primaryColor : (isToday ? orangeAccent : Colors.grey.shade200),
                         width: isToday && !isSelected ? 2 : 1,
                       ),
-                      boxShadow: isSelected
-                          ? [BoxShadow(color: primaryColor.withValues(alpha: 0.3), blurRadius: 8)]
+                      boxShadow: isSelected && !_viewingAllDates
+                          ? [BoxShadow(color: primaryColor.withOpacity(0.3), blurRadius: 8)]
                           : null,
                     ),
                     child: Column(
@@ -503,7 +603,7 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
                           DateFormat('EEE').format(date),
                           style: TextStyle(
                             fontSize: 10,
-                            color: isSelected ? Colors.white70 : textSecondary,
+                            color: isSelected && !_viewingAllDates ? Colors.white70 : textSecondary,
                           ),
                         ),
                         const SizedBox(height: 4),
@@ -512,14 +612,14 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
                           style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
-                            color: isSelected ? Colors.white : textPrimary,
+                            color: isSelected && !_viewingAllDates ? Colors.white : textPrimary,
                           ),
                         ),
                         Text(
                           DateFormat('MMM').format(date),
                           style: TextStyle(
                             fontSize: 9,
-                            color: isSelected ? Colors.white70 : textSecondary,
+                            color: isSelected && !_viewingAllDates ? Colors.white70 : textSecondary,
                           ),
                         ),
                       ],
@@ -535,6 +635,7 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
   }
 
   Widget _buildStats() {
+    final activeAppointments = _appointments.where((a) => a['status'] != 'Cancelled').toList();
     final booked = _appointments.where((a) => a['status'] == 'Booked').length;
     final completed = _appointments.where((a) => a['status'] == 'Completed').length;
     final cancelled = _appointments.where((a) => a['status'] == 'Cancelled').length;
@@ -544,7 +645,7 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [primaryColor.withValues(alpha: 0.1), primaryDark.withValues(alpha: 0.05)],
+          colors: [primaryColor.withOpacity(0.1), primaryDark.withOpacity(0.05)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -553,7 +654,7 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
       ),
       child: Row(
         children: [
-          Expanded(child: _buildStatItem("Total", "${_appointments.length}", primaryDark)),
+          Expanded(child: _buildStatItem("Active", "${activeAppointments.length}", primaryDark)),
           Expanded(child: _buildStatItem("New", "$booked", orangeAccent)),
           Expanded(child: _buildStatItem("Done", "$completed", greenAccent)),
           Expanded(child: _buildStatItem("Cancel", "$cancelled", redAccent)),
@@ -637,9 +738,11 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
             ),
             const SizedBox(height: 8),
             Text(
-              _selectedFilter == 'All'
-                  ? "No appointments for this date"
-                  : "No $_selectedFilter appointments",
+              _viewingAllDates
+                  ? "No appointments found"
+                  : (_selectedFilter == 'All'
+                      ? "No appointments for this date"
+                      : "No $_selectedFilter appointments"),
               style: const TextStyle(color: textSecondary),
             ),
           ],
@@ -794,30 +897,7 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
                     ],
                   ),
                 ),
-                // Status badge
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: statusColor.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(statusIcon, size: 12, color: statusColor),
-                          const SizedBox(width: 4),
-                          Text(
-                            status,
-                            style: TextStyle(fontSize: 10, color: statusColor, fontWeight: FontWeight.bold),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
+                // Removed Status badge as requested
               ],
             ),
           ),
@@ -848,78 +928,20 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
                 ),
               ),
             ),
-          // Action buttons
-          if (status != 'Completed' && status != 'Cancelled')
+          // Action buttons - Only show Cancellation as other statuses were removed
+          if (status != 'Cancelled' && status != 'Completed')
             Container(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-              child: Column(
+              child: Row(
                 children: [
-                  // Status progression buttons
-                  Row(
-                    children: [
-                      if (status == 'Booked')
-                        Expanded(
-                          child: _buildActionButton(
-                            "Mark Waiting",
-                            Icons.hourglass_empty_rounded,
-                            blueAccent,
-                            () => _updateStatus(appointment['id'], 'Waiting'),
-                          ),
-                        ),
-                      if (status == 'Booked' || status == 'Waiting')
-                        const SizedBox(width: 10),
-                      if (status == 'Booked' || status == 'Waiting')
-                        Expanded(
-                          child: _buildActionButton(
-                            "Start",
-                            Icons.play_arrow_rounded,
-                            purpleAccent,
-                            () => _updateStatus(appointment['id'], 'In Progress'),
-                          ),
-                        ),
-                    ],
+                  Expanded(
+                    child: _buildActionButton(
+                      "Cancel Appointment",
+                      Icons.cancel_rounded,
+                      redAccent,
+                      () => _showCancelDialog(appointment['id']),
+                    ),
                   ),
-                  // Completed / Cancelled buttons for In Progress
-                  if (status == 'In Progress')
-                    const SizedBox(height: 8),
-                  if (status == 'In Progress')
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _buildActionButton(
-                            "Completed ✓",
-                            Icons.check_circle_rounded,
-                            greenAccent,
-                            () => _updateStatus(appointment['id'], 'Completed'),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: _buildActionButton(
-                            "Cancelled",
-                            Icons.cancel_rounded,
-                            redAccent,
-                            () => _showCancelDialog(appointment['id']),
-                          ),
-                        ),
-                      ],
-                    ),
-                  // Quick mark as Cancelled for Booked/Waiting
-                  if (status == 'Booked' || status == 'Waiting')
-                    const SizedBox(height: 8),
-                  if (status == 'Booked' || status == 'Waiting')
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _buildActionButton(
-                            "Cancel Appointment",
-                            Icons.cancel_rounded,
-                            redAccent,
-                            () => _showCancelDialog(appointment['id']),
-                          ),
-                        ),
-                      ],
-                    ),
                 ],
               ),
             ),

@@ -33,6 +33,7 @@ class _PatientAppointmentPageState extends State<PatientAppointmentPage> {
   String? _selectedDoctorId;
   String? _selectedDoctorName;
   String? _selectedSpecialization;
+  double _selectedDoctorFee = 0.0; // Will be updated when doctor is selected
   DateTime _selectedDate = DateTime.now();
   String? _selectedTimeSlot;
   String _symptoms = '';
@@ -43,6 +44,9 @@ class _PatientAppointmentPageState extends State<PatientAppointmentPage> {
   List<Map<String, dynamic>> _doctors = [];
   List<String> _availableSlots = [];
   List<String> _bookedSlots = [];
+  
+  // Doctor's working days (1=Mon, 7=Sun)
+  List<int> _doctorWorkDays = [];
 
   // Available time slots (10 AM to 4 PM - Working Hours)
   final List<String> _allTimeSlots = [
@@ -104,22 +108,34 @@ class _PatientAppointmentPageState extends State<PatientAppointmentPage> {
         final List<dynamic> slots = availabilityDoc.data()!['slots'];
         generatedSlots = slots.map((s) => s.toString()).toList();
       } else if (weeklySchedule != null) {
-        // Explicitly cast days to List<int> for proper comparison
-        final List<int> workDays = (weeklySchedule['days'] as List<dynamic>?)
-            ?.map((d) => d is int ? d : int.tryParse(d.toString()) ?? 0)
-            .toList() ?? [];
+        // 1. Map weekday index to name
+        final dayMap = {1: 'monday', 2: 'tuesday', 3: 'wednesday', 4: 'thursday', 5: 'friday', 6: 'saturday', 7: 'sunday'};
+        final dayName = dayMap[weekday];
         
-        debugPrint("Patient Booking: weekday=$weekday, workDays=$workDays, contains=${workDays.contains(weekday)}");
-        
-        if (workDays.contains(weekday)) {
-          final String startTimeStr = weeklySchedule['startTime'] ?? '10:00';
-          final String endTimeStr = weeklySchedule['endTime'] ?? '16:00';
-          final int duration = weeklySchedule['slotDuration'] ?? 20;
-          
-          generatedSlots = _generateTimeSlots(startTimeStr, endTimeStr, duration);
+        // 2. Check for per-day schedule first
+        if (weeklySchedule.containsKey('perDay') && dayName != null) {
+          final perDay = weeklySchedule['perDay'] as Map<String, dynamic>;
+          if (perDay.containsKey(dayName)) {
+            final dayData = perDay[dayName] as Map<String, dynamic>;
+            if (dayData['isEnabled'] == true) {
+              final String startTimeStr = dayData['startTime'] ?? '10:00';
+              final String endTimeStr = dayData['endTime'] ?? '16:00';
+              final int duration = weeklySchedule['slotDuration'] ?? 20;
+              generatedSlots = _generateTimeSlots(startTimeStr, endTimeStr, duration);
+            }
+          }
         } else {
-          // Doctor doesn't work on this day of the week
-          generatedSlots = [];
+          // Fallback to legacy format
+          final List<int> workDays = (weeklySchedule['days'] as List<dynamic>?)
+              ?.map((d) => d is int ? d : int.tryParse(d.toString()) ?? 0)
+              .toList() ?? [];
+          
+          if (workDays.contains(weekday)) {
+            final String startTimeStr = weeklySchedule['startTime'] ?? '10:00';
+            final String endTimeStr = weeklySchedule['endTime'] ?? '16:00';
+            final int duration = weeklySchedule['slotDuration'] ?? 20;
+            generatedSlots = _generateTimeSlots(startTimeStr, endTimeStr, duration);
+          }
         }
       } else {
         // No schedule set at all - fallback to default for legacy doctors
@@ -138,7 +154,10 @@ class _PatientAppointmentPageState extends State<PatientAppointmentPage> {
       _bookedSlots = appointmentsQuery.docs.where((doc) {
         final data = doc.data();
         final timestamp = data['appodate'] as Timestamp?;
-        if (timestamp != null) {
+        final status = data['status'] as String? ?? 'Booked';
+        
+        // ONLY count as booked if NOT cancelled
+        if (timestamp != null && status != 'Cancelled') {
           final dt = timestamp.toDate();
           return dt.isAfter(dateStart) && dt.isBefore(dateEnd);
         }
@@ -231,41 +250,18 @@ class _PatientAppointmentPageState extends State<PatientAppointmentPage> {
                 color: primaryColor.withValues(alpha: 0.1),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.payment_rounded, color: primaryColor, size: 48),
+              child: const Icon(Icons.event_available_rounded, color: primaryColor, size: 48),
             ),
             const SizedBox(height: 20),
             const Text(
-              "Consultation Fee",
+              "Confirm Appointment",
               style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: textPrimary),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 12),
             Text(
-              "Appointment with Dr. $_selectedDoctorName",
+              "Do you want to book an appointment with Dr. $_selectedDoctorName on ${DateFormat('MMM dd').format(_selectedDate)} at $_selectedTimeSlot?",
               textAlign: TextAlign.center,
-              style: const TextStyle(color: textSecondary, fontSize: 14),
-            ),
-            const SizedBox(height: 20),
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: greenAccent.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: greenAccent.withValues(alpha: 0.3)),
-              ),
-              child: const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.currency_rupee_rounded, color: greenAccent, size: 28),
-                  Text(
-                    "400",
-                    style: TextStyle(
-                      fontSize: 32,
-                      fontWeight: FontWeight.bold,
-                      color: greenAccent,
-                    ),
-                  ),
-                ],
-              ),
+              style: const TextStyle(color: textSecondary, fontSize: 14, height: 1.4),
             ),
             const SizedBox(height: 24),
             Row(
@@ -294,7 +290,7 @@ class _PatientAppointmentPageState extends State<PatientAppointmentPage> {
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
-                    child: const Text("Pay ₹400", style: TextStyle(fontWeight: FontWeight.bold)),
+                    child: const Text("Confirm Appointment", style: TextStyle(fontWeight: FontWeight.bold)),
                   ),
                 ),
               ],
@@ -319,9 +315,20 @@ class _PatientAppointmentPageState extends State<PatientAppointmentPage> {
         patientName = patientDoc.data()?['name'] ?? 'Patient';
       }
       
-      // Parse appointment time
-      final appointmentDateTime = _parseTimeSlot(_selectedTimeSlot!);
+      // 0. Calculate Token Number for the selected date
+      final dateOnly = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day);
+      final tomorrow = dateOnly.add(const Duration(days: 1));
       
+      final countSnapshot = await _firestore
+          .collection('appointments')
+          .where('appodate', isGreaterThanOrEqualTo: Timestamp.fromDate(dateOnly))
+          .where('appodate', isLessThan: Timestamp.fromDate(tomorrow))
+          .get();
+          
+      final nextToken = countSnapshot.docs.length + 1;
+
+      final appointmentDateTime = _parseTimeSlot(_selectedTimeSlot!);
+
       // Create appointment with consultation fee
       await _firestore.collection('appointments').add({
         'patientId': user.uid,
@@ -331,9 +338,10 @@ class _PatientAppointmentPageState extends State<PatientAppointmentPage> {
         'specialization': _selectedSpecialization,
         'appodate': Timestamp.fromDate(appointmentDateTime),
         'timeSlot': _selectedTimeSlot,
+        'tokenno': nextToken,
         'symptoms': _symptoms.trim(),
         'status': 'Booked',
-        'consultationFee': 400,
+        'consultationFee': _selectedDoctorFee,
         'createdAt': FieldValue.serverTimestamp(),
       });
       
@@ -345,7 +353,7 @@ class _PatientAppointmentPageState extends State<PatientAppointmentPage> {
           patientName: patientName,
           patientEmail: userEmail,
           doctorName: _selectedDoctorName ?? 'Doctor',
-          tokenNumber: 0, // Placeholder or fetch actual token if implemented
+          tokenNumber: nextToken,
           date: DateFormat('EEEE, MMM dd, yyyy').format(_selectedDate),
           timeSlot: _selectedTimeSlot ?? '',
         );
@@ -356,6 +364,7 @@ class _PatientAppointmentPageState extends State<PatientAppointmentPage> {
         showDialog(
           context: context,
           builder: (ctx) => AlertDialog(
+            key: const ValueKey('booking_success_dialog'),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
             content: Column(
               mainAxisSize: MainAxisSize.min,
@@ -370,7 +379,7 @@ class _PatientAppointmentPageState extends State<PatientAppointmentPage> {
                 ),
                 const SizedBox(height: 20),
                 const Text(
-                  "Payment Successful!",
+                  "Appointment Confirmed!",
                   style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: textPrimary),
                 ),
                 const SizedBox(height: 10),
@@ -378,6 +387,19 @@ class _PatientAppointmentPageState extends State<PatientAppointmentPage> {
                   "Your appointment with Dr. $_selectedDoctorName on ${DateFormat('MMM dd, yyyy').format(_selectedDate)} at $_selectedTimeSlot has been confirmed.",
                   textAlign: TextAlign.center,
                   style: const TextStyle(color: textSecondary, height: 1.4),
+                ),
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: orangeAccent.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    "Token Number: #$nextToken",
+                    key: const ValueKey('token_display'),
+                    style: const TextStyle(color: orangeAccent, fontWeight: FontWeight.bold, fontSize: 18),
+                  ),
                 ),
                 const SizedBox(height: 20),
                 SizedBox(
@@ -588,28 +610,55 @@ class _PatientAppointmentPageState extends State<PatientAppointmentPage> {
           SizedBox(
             height: 180,
             child: ListView.builder(
+              key: const ValueKey('doctor_list'),
               scrollDirection: Axis.horizontal,
               itemCount: _doctors.length,
-              itemBuilder: (ctx, index) => _buildDoctorCard(_doctors[index]),
+              itemBuilder: (ctx, index) => _buildDoctorCard(_doctors[index], index),
             ),
           ),
       ],
     );
   }
 
-  Widget _buildDoctorCard(Map<String, dynamic> doctor) {
+  Widget _buildDoctorCard(Map<String, dynamic> doctor, int index) {
     final isSelected = _selectedDoctorId == doctor['id'];
     final name = doctor['name'] ?? 'Doctor';
     final specialization = doctor['specialization'] ?? 'Specialist';
-    final experience = doctor['experience'] ?? '5+ years';
+    final fee = (doctor['consultationFee'] ?? 0).toDouble();
     
     return GestureDetector(
+      key: ValueKey('doctor_card_$index'),
       onTap: () {
+        // Get doctor's working days from their schedule
+        final weeklySchedule = doctor['weeklySchedule'] as Map<String, dynamic>?;
+        List<int> workDays = [];
+        if (weeklySchedule != null && weeklySchedule['days'] != null) {
+          workDays = (weeklySchedule['days'] as List)
+              .map((d) => d is int ? d : int.tryParse(d.toString()) ?? 0)
+              .toList();
+        }
+        
+        // Get doctor's consultation fee
+        final consultationFee = (doctor['consultationFee'] ?? 0.0).toDouble();
+        
         setState(() {
           _selectedDoctorId = doctor['id'];
           _selectedDoctorName = name;
           _selectedSpecialization = specialization;
+          _selectedDoctorFee = consultationFee;
           _selectedTimeSlot = null;
+          _doctorWorkDays = workDays;
+          
+          // Auto-select first available working day
+          if (workDays.isNotEmpty) {
+            for (int i = 0; i < 14; i++) {
+              final date = DateTime.now().add(Duration(days: i));
+              if (workDays.contains(date.weekday)) {
+                _selectedDate = date;
+                break;
+              }
+            }
+          }
         });
         _loadAvailableSlots();
       },
@@ -687,16 +736,15 @@ class _PatientAppointmentPageState extends State<PatientAppointmentPage> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(
-                    Icons.verified_rounded,
+                    Icons.currency_rupee_rounded,
                     size: 12,
                     color: isSelected ? Colors.white : greenAccent,
                   ),
-                  const SizedBox(width: 4),
                   Text(
-                    "Available",
+                    fee > 0 ? fee.toStringAsFixed(0) : "N/A",
                     style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w600,
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
                       color: isSelected ? Colors.white : greenAccent,
                     ),
                   ),
@@ -751,7 +799,13 @@ class _PatientAppointmentPageState extends State<PatientAppointmentPage> {
               children: [
                 Icon(Icons.calendar_today_rounded, color: textSecondary.withValues(alpha: 0.5)),
                 const SizedBox(width: 8),
-                const Text("Select a doctor to view available dates", style: TextStyle(color: textSecondary)),
+                Flexible(
+                  child: Text(
+                    "Select a doctor to view available dates",
+                    style: const TextStyle(color: textSecondary),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
               ],
             ),
           )
@@ -768,30 +822,37 @@ class _PatientAppointmentPageState extends State<PatientAppointmentPage> {
                                    _selectedDate.year == date.year;
                 final isToday = index == 0;
                 
+                // Check if doctor works on this weekday
+                final isWorkingDay = _doctorWorkDays.isEmpty || _doctorWorkDays.contains(date.weekday);
+                
                 return GestureDetector(
-                  onTap: () {
+                  onTap: isWorkingDay ? () {
                     setState(() {
                       _selectedDate = date;
                       _selectedTimeSlot = null;
                     });
                     _loadAvailableSlots();
-                  },
+                  } : null,
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 200),
                     width: 60,
                     margin: const EdgeInsets.only(right: 10),
                     padding: const EdgeInsets.symmetric(vertical: 8),
                     decoration: BoxDecoration(
-                      gradient: isSelected
+                      gradient: isSelected && isWorkingDay
                           ? const LinearGradient(colors: [primaryColor, primaryDark])
                           : null,
-                      color: isSelected ? null : cardColor,
+                      color: !isWorkingDay 
+                          ? Colors.grey.shade100 
+                          : (isSelected ? null : cardColor),
                       borderRadius: BorderRadius.circular(14),
                       border: Border.all(
-                        color: isSelected ? primaryColor : (isToday ? orangeAccent : Colors.grey.shade200),
+                        color: !isWorkingDay 
+                            ? Colors.grey.shade300
+                            : (isSelected ? primaryColor : (isToday ? orangeAccent : Colors.grey.shade200)),
                         width: isToday && !isSelected ? 2 : 1,
                       ),
-                      boxShadow: isSelected
+                      boxShadow: isSelected && isWorkingDay
                           ? [BoxShadow(color: primaryColor.withValues(alpha: 0.3), blurRadius: 10)]
                           : null,
                     ),
@@ -803,7 +864,9 @@ class _PatientAppointmentPageState extends State<PatientAppointmentPage> {
                           DateFormat('EEE').format(date),
                           style: TextStyle(
                             fontSize: 10,
-                            color: isSelected ? Colors.white70 : textSecondary,
+                            color: !isWorkingDay 
+                                ? Colors.grey.shade400
+                                : (isSelected ? Colors.white70 : textSecondary),
                             fontWeight: FontWeight.w500,
                           ),
                         ),
@@ -813,7 +876,9 @@ class _PatientAppointmentPageState extends State<PatientAppointmentPage> {
                           style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
-                            color: isSelected ? Colors.white : textPrimary,
+                            color: !isWorkingDay 
+                                ? Colors.grey.shade400
+                                : (isSelected ? Colors.white : textPrimary),
                           ),
                         ),
                         Text(
@@ -916,13 +981,17 @@ class _PatientAppointmentPageState extends State<PatientAppointmentPage> {
           Wrap(
             spacing: 10,
             runSpacing: 10,
-            children: _allTimeSlots.map((slot) {
+            key: const ValueKey('time_slots_grid'),
+            children: _allTimeSlots.asMap().entries.map((entry) {
+              final currentSlotIndex = entry.key;
+              final slot = entry.value;
               final isSelected = _selectedTimeSlot == slot;
               final isBooked = _bookedSlots.contains(slot);
               final isPast = pastSlots.contains(slot);
               final isUnavailable = isBooked || isPast;
               
               return GestureDetector(
+                key: ValueKey('slot_$currentSlotIndex'),
                 onTap: isUnavailable ? null : () => setState(() => _selectedTimeSlot = slot),
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 200),
@@ -1096,16 +1165,26 @@ class _PatientAppointmentPageState extends State<PatientAppointmentPage> {
                     Text("Consultation Fee", style: TextStyle(fontWeight: FontWeight.w600, color: textPrimary)),
                   ],
                 ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: greenAccent,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Text(
-                    "₹400",
-                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
-                  ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: greenAccent,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        "₹${_selectedDoctorFee.toStringAsFixed(0)}",
+                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    const Text(
+                      "Pay at Clinic",
+                      style: TextStyle(fontSize: 9, color: greenAccent, fontWeight: FontWeight.bold),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -1142,6 +1221,7 @@ class _PatientAppointmentPageState extends State<PatientAppointmentPage> {
       width: double.infinity,
       height: 56,
       child: ElevatedButton(
+        key: const ValueKey('confirm_booking_button'),
         onPressed: canBook && !_isBooking ? _bookAppointment : null,
         style: ElevatedButton.styleFrom(
           backgroundColor: canBook ? primaryColor : Colors.grey.shade300,

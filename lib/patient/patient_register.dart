@@ -21,6 +21,7 @@ class _RegisterPageState extends State<RegisterPage> {
   final TextEditingController _dateController = TextEditingController();
   final TextEditingController _passController = TextEditingController();
   final TextEditingController _confirmPassController = TextEditingController();
+  final TextEditingController _phoneController = TextEditingController();
 
   final FirebaseAuthService _authService = FirebaseAuthService();
   final Color accentColor = const Color(0xFF4FD1C5); 
@@ -159,6 +160,7 @@ class _RegisterPageState extends State<RegisterPage> {
         name: _nameController.text.trim(),
         dateOfBirth: _dateController.text,
         gender: _selectedGender,
+        phone: _phoneController.text.trim(),
         registrationFee: 100,
       );
 
@@ -195,9 +197,30 @@ class _RegisterPageState extends State<RegisterPage> {
               const SizedBox(height: 8),
               Text("Tell us a bit more about yourself", style: TextStyle(color: Colors.grey[600], fontSize: 15)),
               const SizedBox(height: 30),
-              _validatedInput(controller: _nameController, hint: "Full Name", icon: Icons.person_outline, validator: (val) => val!.isEmpty ? "Enter your name" : null),
+              _validatedInput(
+                keyVal: 'register_name',
+                controller: _nameController, hint: "Full Name", icon: Icons.person_outline, validator: (val) => val!.isEmpty ? "Enter your name" : null),
               const SizedBox(height: 16),
-              _validatedInput(controller: _emailController, hint: "Email Address", icon: Icons.mail_outline, validator: (val) => val!.isEmpty ? "Enter email" : null),
+              _validatedInput(
+                keyVal: 'register_email',
+                controller: _emailController, hint: "Email Address", icon: Icons.mail_outline, validator: (val) => val!.isEmpty ? "Enter email" : null),
+              const SizedBox(height: 16),
+              _validatedInput(
+                controller: _phoneController,
+                hint: "Phone Number",
+                icon: Icons.phone_outlined,
+                inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                  LengthLimitingTextInputFormatter(10),
+                ],
+                validator: (val) {
+                  if (val!.isEmpty) return "Enter phone number";
+                  if (val.length != 10) return "Must be 10 digits";
+                  if (val.startsWith('0') || val.startsWith('1')) return "Cannot start with 0 or 1";
+                  if (!RegExp(r'^[0-9]+$').hasMatch(val)) return "Digits only";
+                  return null;
+                },
+              ),
               const SizedBox(height: 16),
               TextFormField(
                 controller: _dateController,
@@ -216,7 +239,9 @@ class _RegisterPageState extends State<RegisterPage> {
               // Only show password fields if NOT registering with Google
               if (widget.googleUser == null) ...[
                 const SizedBox(height: 16),
-                _validatedInput(controller: _passController, hint: "Password", icon: Icons.lock_outline, isPassword: true, validator: (val) => val!.length < 6 ? "Min 6 chars" : null),
+                _validatedInput(
+                  keyVal: 'register_password',
+                  controller: _passController, hint: "Password", icon: Icons.lock_outline, isPassword: true, validator: (val) => val!.length < 6 ? "Min 6 chars" : null),
                 const SizedBox(height: 16),
                 _validatedInput(controller: _confirmPassController, hint: "Confirm Password", icon: Icons.lock_reset, isPassword: true, validator: (val) => val != _passController.text ? "No match" : null),
               ],
@@ -234,11 +259,12 @@ class _RegisterPageState extends State<RegisterPage> {
     return Container(
       width: double.infinity, height: 56,
       decoration: BoxDecoration(borderRadius: BorderRadius.circular(16), boxShadow: [BoxShadow(color: accentColor.withOpacity(0.3), blurRadius: 12, offset: const Offset(0, 6))]),
-      child: ElevatedButton(
-        onPressed: _isLoading ? null : _submitForm,
-        style: ElevatedButton.styleFrom(backgroundColor: accentColor, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
-        child: _isLoading ? const CircularProgressIndicator(color: Colors.white) : const Text("Sign Up", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-      ),
+        child: ElevatedButton(
+          key: const ValueKey('register_submit'),
+          onPressed: _isLoading ? null : _submitForm,
+          style: ElevatedButton.styleFrom(backgroundColor: accentColor, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
+          child: _isLoading ? const CircularProgressIndicator(color: Colors.white) : const Text("Sign Up", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        ),
     );
   }
 
@@ -250,7 +276,22 @@ class _RegisterPageState extends State<RegisterPage> {
     );
   }
 
-  Widget _validatedInput({required TextEditingController controller, required String hint, required IconData icon, required String? Function(String?) validator, bool isPassword = false}) {
-    return TextFormField(controller: controller, obscureText: isPassword ? _isObscured : false, validator: validator, decoration: _inputStyle(hint: hint, icon: icon, isPassword: isPassword));
+  Widget _validatedInput({
+    String? keyVal,
+    required TextEditingController controller,
+    required String hint,
+    required IconData icon,
+    required String? Function(String?) validator,
+    bool isPassword = false,
+    List<TextInputFormatter>? inputFormatters,
+  }) {
+    return TextFormField(
+      key: keyVal != null ? ValueKey(keyVal) : null,
+      controller: controller,
+      obscureText: isPassword ? _isObscured : false,
+      validator: validator,
+      inputFormatters: inputFormatters,
+      decoration: _inputStyle(hint: hint, icon: icon, isPassword: isPassword),
+    );
   }
 }

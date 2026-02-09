@@ -77,21 +77,21 @@ class _ClinicStaffDashboardState extends State<ClinicStaffDashboard> {
         _firestore.collection('appointments')
             .where('appodate', isGreaterThanOrEqualTo: todayStartTs)
             .where('appodate', isLessThan: todayEndTs)
-            .count()
-            .get(),
-        _firestore.collection('appointments')
-            .where('appodate', isGreaterThanOrEqualTo: todayStartTs)
-            .where('appodate', isLessThan: todayEndTs)
             .get(),
       ]);
       
       _totalDoctors = (results[0] as AggregateQuerySnapshot).count ?? 0;
       _totalPatients = (results[1] as AggregateQuerySnapshot).count ?? 0;
-      _todayAppointments = (results[2] as AggregateQuerySnapshot).count ?? 0;
       
-      final queueSnapshot = results[3] as QuerySnapshot;
-      _patientsInQueue = queueSnapshot.docs.where((doc) {
-        final status = (doc.data() as Map)['status'];
+      final todaySnapshot = results[2] as QuerySnapshot;
+      final todayDocs = todaySnapshot.docs.map((doc) => doc.data() as Map).toList();
+      
+      // Today appointments excluding cancelled
+      _todayAppointments = todayDocs.where((data) => data['status'] != 'Cancelled').length;
+      
+      // Patients in queue (Booked or Waiting)
+      _patientsInQueue = todayDocs.where((data) {
+        final status = data['status'];
         return status == 'Waiting' || status == 'Booked';
       }).length;
       
@@ -441,6 +441,7 @@ class _ClinicStaffDashboardState extends State<ClinicStaffDashboard> {
 
   Widget _buildMainActionCard() {
     return GestureDetector(
+      key: const ValueKey('view_today_schedule'),
       onTap: () async {
         await Navigator.push(context, MaterialPageRoute(builder: (_) => const ViewTodayAppointmentsPage()));
         _loadDashboardData();
@@ -504,7 +505,7 @@ class _ClinicStaffDashboardState extends State<ClinicStaffDashboard> {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Text("$_todayAppointments", style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.white)),
-          const Text("docs", style: TextStyle(fontSize: 10, color: Colors.white70)),
+          const Text("Appts", style: TextStyle(fontSize: 10, color: Colors.white70)),
         ],
       ),
     );
@@ -590,7 +591,10 @@ class _ClinicStaffDashboardState extends State<ClinicStaffDashboard> {
   
   Widget _buildNavItem(IconData icon, String label, int index) {
     final isSelected = _selectedNavIndex == index;
+    final String keyVal = index == 0 ? 'nav_home' : index == 1 ? 'nav_schedule' : index == 2 ? 'nav_scan' : 'nav_settings';
+    
     return GestureDetector(
+      key: ValueKey(keyVal),
       onTap: () {
         if (index == _selectedNavIndex) return;
         setState(() => _selectedNavIndex = index);

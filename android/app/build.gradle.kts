@@ -12,8 +12,8 @@ android {
     namespace = "com.example.dermascan"
     compileSdk = flutter.compileSdkVersion
     
-    // Updated this line to match the version requested by Firestore/FirebaseAuth
-    ndkVersion = "27.0.12077973" 
+    // Updated this line to match the version requested by integration_test and backward compatibility
+    ndkVersion = "28.2.13676358" 
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
@@ -29,7 +29,7 @@ android {
         applicationId = "com.example.dermascan"
         
         // Recommended: explicitly set minSdk to 23 for better Firebase support
-        minSdk = 23 
+        minSdk = flutter.minSdkVersion 
         
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode

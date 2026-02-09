@@ -16,6 +16,10 @@ class _StaffRegisterPatientPageState extends State<StaffRegisterPatientPage> {
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _phoneController = TextEditingController();
+  final List<TextInputFormatter> _phoneFormatters = [
+    FilteringTextInputFormatter.digitsOnly,
+    LengthLimitingTextInputFormatter(10),
+  ];
   final TextEditingController _dobController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
 
@@ -567,7 +571,14 @@ class _StaffRegisterPatientPageState extends State<StaffRegisterPatientPage> {
                 label: "Phone Number",
                 icon: Icons.phone_outlined,
                 keyboardType: TextInputType.phone,
-                validator: (val) => val!.isEmpty ? "Required" : null,
+                inputFormatters: _phoneFormatters,
+                validator: (val) {
+                  if (val!.isEmpty) return "Required";
+                  if (val.length != 10) return "Must be 10 digits";
+                  if (val.startsWith('0') || val.startsWith('1')) return "Cannot start with 0 or 1";
+                  if (!RegExp(r'^[0-9]+$').hasMatch(val)) return "Digits only";
+                  return null;
+                },
               ),
               const SizedBox(height: 16),
               
@@ -647,7 +658,6 @@ class _StaffRegisterPatientPageState extends State<StaffRegisterPatientPage> {
       ),
     );
   }
-
   Widget _buildTextField({
     required TextEditingController controller,
     required String label,
@@ -657,6 +667,7 @@ class _StaffRegisterPatientPageState extends State<StaffRegisterPatientPage> {
     VoidCallback? onTap,
     bool isPassword = false,
     TextInputType? keyboardType,
+    List<TextInputFormatter>? inputFormatters,
     String? Function(String?)? validator,
   }) {
     return Column(
@@ -670,6 +681,7 @@ class _StaffRegisterPatientPageState extends State<StaffRegisterPatientPage> {
           onTap: onTap,
           obscureText: isPassword,
           keyboardType: keyboardType,
+          inputFormatters: inputFormatters,
           validator: validator,
           decoration: InputDecoration(
             hintText: hint ?? "Enter $label",

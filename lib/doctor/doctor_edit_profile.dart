@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/services.dart';
 
 class DoctorEditProfilePage extends StatefulWidget {
   const DoctorEditProfilePage({super.key});
@@ -218,6 +219,17 @@ class _DoctorEditProfilePageState extends State<DoctorEditProfilePage> {
                       label: 'Phone Number',
                       icon: Icons.phone_rounded,
                       keyboardType: TextInputType.phone,
+                      inputFormatters: [
+                        FilteringTextInputFormatter.digitsOnly,
+                        LengthLimitingTextInputFormatter(10),
+                      ],
+                      validator: (value) {
+                        if (value == null || value.isEmpty) return 'Please enter your phone number';
+                        if (value.length != 10) return 'Phone number must be 10 digits';
+                        if (value.startsWith('0') || value.startsWith('1')) return 'Cannot start with 0 or 1';
+                        if (!RegExp(r'^[0-9]+$').hasMatch(value)) return 'Please enter digits only';
+                        return null;
+                      },
                     ),
 
                     const SizedBox(height: 24),
@@ -304,6 +316,7 @@ class _DoctorEditProfilePageState extends State<DoctorEditProfilePage> {
     String? hint,
     int maxLines = 1,
     TextInputType? keyboardType,
+    List<TextInputFormatter>? inputFormatters,
     String? Function(String?)? validator,
   }) {
     return Container(
@@ -323,6 +336,7 @@ class _DoctorEditProfilePageState extends State<DoctorEditProfilePage> {
         controller: controller,
         maxLines: maxLines,
         keyboardType: keyboardType,
+        inputFormatters: inputFormatters,
         validator: validator,
         decoration: InputDecoration(
           labelText: label,

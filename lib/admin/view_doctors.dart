@@ -233,9 +233,7 @@ class _ViewDoctorsPageState extends State<ViewDoctorsPage> {
                 const SizedBox(width: 12),
                 Expanded(
                   child: ElevatedButton.icon(
-                    onPressed: () {
-                      // TODO: Edit doctor functionality
-                    },
+                    onPressed: () => _showEditDoctorDialog(docId, name, fee),
                     icon: const Icon(Icons.edit_outlined, size: 18),
                     label: const Text("Edit"),
                     style: ElevatedButton.styleFrom(
@@ -294,7 +292,7 @@ class _ViewDoctorsPageState extends State<ViewDoctorsPage> {
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Text("Remove Doctor", style: TextStyle(fontWeight: FontWeight.bold)),
-        content: Text("Are you sure you want to remove Dr. $name?"),
+        content: const Text("Are you sure you want to remove this doctor? This will delete all their professional data and appointments. Note: Their login account will remain in Firebase Auth but they will no longer have access to the app."),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
@@ -320,6 +318,15 @@ class _ViewDoctorsPageState extends State<ViewDoctorsPage> {
                 for (var doc in appointments.docs) {
                   await doc.reference.delete();
                 }
+
+                // Delete related prescriptions
+                final prescriptions = await firestore
+                    .collection('prescriptions')
+                    .where('doctor_id', isEqualTo: docId)
+                    .get();
+                for (var doc in prescriptions.docs) {
+                  await doc.reference.delete();
+                }
                 
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -339,6 +346,135 @@ class _ViewDoctorsPageState extends State<ViewDoctorsPage> {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             ),
             child: const Text("Remove", style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showEditDoctorDialog(String docId, String name, double currentFee) {
+    final feeController = TextEditingController(text: currentFee.toStringAsFixed(0));
+    
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: accentColor.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(Icons.edit_rounded, color: accentColor, size: 24),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text("Edit Doctor", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                  Text("Dr. $name", style: TextStyle(fontSize: 14, color: Colors.grey[600])),
+                ],
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              "Consultation Fee (₹)",
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: feeController,
+              keyboardType: TextInputType.number,
+              decoration: InputDecoration(
+                prefixIcon: Icon(Icons.currency_rupee_rounded, color: accentColor),
+                hintText: "Enter consultation fee",
+                filled: true,
+                fillColor: inputFill,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: accentColor, width: 2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.orange.shade50,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.orange.shade200),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.info_outline_rounded, color: Colors.orange.shade700, size: 20),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      "This fee will be shown when patients book appointments with this doctor.",
+                      style: TextStyle(fontSize: 12, color: Colors.orange.shade800),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text("Cancel", style: TextStyle(color: Colors.grey[600])),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final newFee = double.tryParse(feeController.text.trim()) ?? 0.0;
+              Navigator.pop(ctx);
+              
+              try {
+                await FirebaseFirestore.instance
+                    .collection('doctors')
+                    .doc(docId)
+                    .update({'consultationFee': newFee});
+                
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text("Consultation fee updated to ₹${newFee.toStringAsFixed(0)}"),
+                      backgroundColor: Colors.green,
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                }
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text("Error updating fee: $e"),
+                      backgroundColor: Colors.red,
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                }
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: accentColor,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            ),
+            child: const Text("Save", style: TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),

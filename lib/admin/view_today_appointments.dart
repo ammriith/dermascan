@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:dermascan/admin/staff_register_patient.dart';
 import 'package:dermascan/admin/staff_book_appointment.dart';
+import 'package:dermascan/admin/appointments_page.dart';
 
 class ViewTodayAppointmentsPage extends StatefulWidget {
   const ViewTodayAppointmentsPage({super.key});
@@ -67,6 +68,7 @@ class _ViewTodayAppointmentsPageState extends State<ViewTodayAppointmentsPage> w
       floatingActionButton: Padding(
         padding: const EdgeInsets.only(bottom: 70), // Above bottom nav
         child: FloatingActionButton.extended(
+          key: const ValueKey('new_appointment_fab'),
           onPressed: () => _showQuickActionSheet(context),
           backgroundColor: accentColor,
           icon: const Icon(Icons.add_rounded, color: Colors.white),
@@ -77,6 +79,9 @@ class _ViewTodayAppointmentsPageState extends State<ViewTodayAppointmentsPage> w
   }
   
   Widget _buildHeader(DateTime today) {
+    final todayStart = DateTime(today.year, today.month, today.day);
+    final todayEnd = todayStart.add(const Duration(days: 1));
+
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
       decoration: BoxDecoration(
@@ -112,13 +117,35 @@ class _ViewTodayAppointmentsPageState extends State<ViewTodayAppointmentsPage> w
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      "Today's Schedule",
-                      style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                        color: textColor,
-                      ),
+                    StreamBuilder<QuerySnapshot>(
+                      stream: FirebaseFirestore.instance
+                          .collection('appointments')
+                          .where('appodate', isGreaterThanOrEqualTo: Timestamp.fromDate(todayStart))
+                          .where('appodate', isLessThan: Timestamp.fromDate(todayEnd))
+                          .snapshots(),
+                      builder: (context, snapshot) {
+                        int count = 0;
+                        if (snapshot.hasData) {
+                          var docs = snapshot.data!.docs;
+                          if (_selectedFilter == 'Booked') {
+                             count = docs.where((d) {
+                               final s = (d.data() as Map)['status'] ?? '';
+                               return s == 'Booked' || s == 'Waiting';
+                             }).length;
+                          } else {
+                             count = docs.where((d) => (d.data() as Map)['status'] != 'Cancelled').length;
+                          }
+                        }
+                        return Text(
+                          "Today's Schedule ${count > 0 ? '($count)' : ''}",
+                          key: const ValueKey('today_schedule_title'),
+                          style: const TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
+                            color: textColor,
+                          ), 
+                        );
+                      }
                     ),
                     const SizedBox(height: 4),
                     Row(
@@ -147,6 +174,26 @@ class _ViewTodayAppointmentsPageState extends State<ViewTodayAppointmentsPage> w
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: const Icon(Icons.search_rounded, color: accentColor, size: 22),
+              ),
+              const SizedBox(width: 8),
+              // Calendar/All dates icon
+              GestureDetector(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => AppointmentsPage(isDoctor: false),
+                    ),
+                  );
+                },
+                child: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(Icons.calendar_month_rounded, color: Colors.orange, size: 22),
+                ),
               ),
             ],
           ),
@@ -243,7 +290,7 @@ class _ViewTodayAppointmentsPageState extends State<ViewTodayAppointmentsPage> w
   }
   
   Widget _buildFilterTabs() {
-    final filters = ['All', 'Waiting', 'In Progress', 'Completed'];
+    final filters = ['All', 'Booked'];
     
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -309,13 +356,10 @@ class _ViewTodayAppointmentsPageState extends State<ViewTodayAppointmentsPage> w
         var appointments = snapshot.data?.docs ?? [];
         
         // Apply filter
-        if (_selectedFilter != 'All') {
+        if (_selectedFilter == 'Booked') {
           appointments = appointments.where((doc) {
             final status = (doc.data() as Map)['status'] ?? '';
-            if (_selectedFilter == 'Waiting') return status == 'Waiting' || status == 'Booked';
-            if (_selectedFilter == 'In Progress') return status == 'In Consultation';
-            if (_selectedFilter == 'Completed') return status == 'Completed';
-            return true;
+            return status == 'Booked' || status == 'Waiting';
           }).toList();
         }
         
@@ -336,6 +380,7 @@ class _ViewTodayAppointmentsPageState extends State<ViewTodayAppointmentsPage> w
           itemBuilder: (context, index) {
             final doc = appointments[index] as QueryDocumentSnapshot;
             final data = doc.data() as Map<String, dynamic>;
+            data['id'] = doc.id; // Add ID for operations
             return _buildAppointmentCard(data, index);
           },
         );
@@ -386,6 +431,7 @@ class _ViewTodayAppointmentsPageState extends State<ViewTodayAppointmentsPage> w
     final isActive = status == 'In Consultation';
 
     return AnimatedContainer(
+      key: ValueKey('appointment_card_$index'),
       duration: Duration(milliseconds: 200 + (index * 50)),
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
@@ -408,6 +454,7 @@ class _ViewTodayAppointmentsPageState extends State<ViewTodayAppointmentsPage> w
       child: Material(
         color: Colors.transparent,
         child: InkWell(
+          key: ValueKey('appointment_card_${index}_options'),
           onTap: () => _showAppointmentDetails(data),
           borderRadius: BorderRadius.circular(16),
           child: Padding(
@@ -432,7 +479,7 @@ class _ViewTodayAppointmentsPageState extends State<ViewTodayAppointmentsPage> w
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Text(
-                        "#$token",
+                        "${index + 1}",
                         style: TextStyle(
                           color: isActive ? Colors.white : textColor,
                           fontWeight: FontWeight.bold,
@@ -475,8 +522,7 @@ class _ViewTodayAppointmentsPageState extends State<ViewTodayAppointmentsPage> w
                   ),
                 ),
                 
-                // Status Badge
-                _buildStatusBadge(status),
+                // Removed Status badge as requested
               ],
             ),
           ),
@@ -548,7 +594,9 @@ class _ViewTodayAppointmentsPageState extends State<ViewTodayAppointmentsPage> w
   }
   
   Widget _buildBottomSheetAction(String label, IconData icon, VoidCallback onTap) {
+    final String keyVal = label == "Register New Patient" ? 'action_register_patient' : 'action_book_appointment';
     return ListTile(
+      key: ValueKey(keyVal),
       onTap: onTap,
       leading: Container(
         padding: const EdgeInsets.all(10),
@@ -564,7 +612,95 @@ class _ViewTodayAppointmentsPageState extends State<ViewTodayAppointmentsPage> w
   }
   
   void _showAppointmentDetails(Map<String, dynamic> data) {
-    // Can be implemented to show full appointment details
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(24),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              "Appointment Details",
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 20),
+            _detailRow("Patient", data['patient_name'] ?? data['patientName'] ?? "N/A"),
+            _detailRow("Doctor", "Dr. ${data['doctor_name'] ?? data['doctorName'] ?? "N/A"}"),
+            _detailRow("Token", "#${data['tokenno'] ?? 'N/A'}"),
+            _detailRow("Status", data['status'] ?? "Booked"),
+            const SizedBox(height: 30),
+            if (data['status'] != 'Cancelled')
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  key: const ValueKey('action_cancel_appointment'),
+                  onPressed: () => _confirmCancellation(data),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.red.shade50,
+                    foregroundColor: Colors.red,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  child: const Text("Cancel Appointment", style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+              ),
+            const SizedBox(height: 12),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _detailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: const TextStyle(color: Colors.grey)),
+          Text(value, style: const TextStyle(fontWeight: FontWeight.w600)),
+        ],
+      ),
+    );
+  }
+
+  void _confirmCancellation(Map<String, dynamic> data) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Cancel Appointment?"),
+        content: const Text("This will notify the patient and free up the time slot."),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("No")),
+          ElevatedButton(
+            key: const ValueKey('confirm_cancel_button'),
+            onPressed: () async {
+              Navigator.pop(ctx); // Close dialog
+              Navigator.pop(context); // Close bottom sheet
+              
+              // Perform cancellation in Firestore
+              final id = data['id']; // Make sure ID is passed or available
+              if (id != null) {
+                await FirebaseFirestore.instance.collection('appointments').doc(id).update({
+                  'status': 'Cancelled'
+                });
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text("Appointment Cancelled")),
+                );
+              }
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text("Yes, Cancel", style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
   }
 
   Color _getStatusColor(String status) {
