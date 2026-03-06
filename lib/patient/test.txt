@@ -1,0 +1,50 @@
+﻿import 'dart:io';
+import 'package:dermascan/landing_page.dart';
+import 'package:dermascan/patient/patient_appointment.dart';
+import 'package:dermascan/patient/patient_medical_history.dart';
+import 'package:dermascan/patient/patient_reminders.dart';
+import 'package:dermascan/patient/view_appointment.dart';
+import 'package:dermascan/patient/feedback_page.dart';
+import 'package:dermascan/patient/patient_payments.dart';
+import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:image_picker/image_picker.dart';
+
+class PatientDashboard extends StatefulWidget {
+  const PatientDashboard({super.key});
+
+  @override
+  State<PatientDashboard> createState() => _PatientDashboardState();
+}
+
+class _PatientDashboardState extends State<PatientDashboard> {
+  ThemeData get theme => Theme.of(context);
+  bool get isDark => theme.brightness == Brightness.dark;
+  // 🔹 THEME COLORS (Consistent with Login/Register)
+  final Color accentColor = const Color(0xFF4FD1C5); 
+
+  // 🔹 PATIENT NAME STATE
+  String _patientName = "Patient";
+  
+  // 🔹 PROFILE PHOTO STATE
+  File? _profileImage;
+  final ImagePicker _imagePicker = ImagePicker();
+
+  // 🔹 UPCOMING APPOINTMENTS STATE
+  List<Map<String, dynamic>> _upcomingAppointments = [];
+  Map<String, dynamic>? _nextAppointment;
+
+  // 🔹 LANGUAGE STATE
+  String _selectedLanguage = 'English'; 
+
+  final Map<String, Map<String, String>> _translations = {
+    'English': {
+      'welcome': 'Welcome back,',
+      'hello': 'Hello',
+      'help': 'How can we help you today?',
+      'dashboard': 'Dashboard',
+      'reminders': 'Reminders',
+      'book_appoint': 'Book Appointment',
+      'view_appoint': 'View Appointment',
+      'reports': 'Reports & Timeline',

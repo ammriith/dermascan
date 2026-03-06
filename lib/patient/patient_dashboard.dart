@@ -9,6 +9,8 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:dermascan/services/notification_service.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 
 class PatientDashboard extends StatefulWidget {
   const PatientDashboard({super.key});
@@ -26,9 +28,11 @@ class _PatientDashboardState extends State<PatientDashboard> {
 
   // 🔹 PATIENT NAME STATE
   String _patientName = "Patient";
+  bool _isLoadingProfile = false;
   
   // 🔹 PROFILE PHOTO STATE
   File? _profileImage;
+  String? _profileImageUrl;
   final ImagePicker _imagePicker = ImagePicker();
 
   // 🔹 UPCOMING APPOINTMENTS STATE
@@ -47,7 +51,7 @@ class _PatientDashboardState extends State<PatientDashboard> {
       'reminders': 'Reminders',
       'book_appoint': 'Book Appointment',
       'view_appoint': 'View Appointment',
-      'reports': 'Reports & Timeline',
+      'reports': 'Reports',
       'language': 'Language',
       'logout': 'Logout',
       'home': 'Home',
@@ -60,6 +64,8 @@ class _PatientDashboardState extends State<PatientDashboard> {
       'manage_visits': 'Check and manage your scheduled visits',
       'history_ai': 'View your reports and medical timeline',
       'med_alerts': 'Medications & doctor suggestions',
+      'patient': 'Patient',
+      'tap_to_change': 'Tap photo to change',
     },
     'Malayalam': {
       'welcome': 'സ്വാഗതം,',
@@ -69,7 +75,7 @@ class _PatientDashboardState extends State<PatientDashboard> {
       'reminders': 'ഓർമ്മപ്പെടുത്തലുകൾ',
       'book_appoint': 'അപ്പോയിന്റ്മെന്റ് ബുക്ക് ചെയ്യുക',
       'view_appoint': 'അപ്പോയിന്റ്മെന്റ് കാണുക',
-      'reports': 'റിപ്പോർട്ടുകളും ടൈംലൈനും',
+      'reports': 'റിപ്പോർട്ടുകളും ',
       'language': 'ഭാഷ',
       'logout': 'പുറത്തിറങ്ങുക',
       'home': 'ഹോം',
@@ -82,6 +88,8 @@ class _PatientDashboardState extends State<PatientDashboard> {
       'manage_visits': 'നിങ്ങളുടെ അപ്പോയിന്റ്‌മെന്റുകൾ പരിശോധിക്കുക',
       'history_ai': 'റിപ്പോർട്ടുകളും മെഡിക്കൽ ടൈംലൈനും കാണുക',
       'med_alerts': 'മരുന്നുകളും ഡോക്ടറുടെ നിർദ്ദേശങ്ങളും',
+      'patient': 'രോഗി',
+      'tap_to_change': 'മാറ്റാൻ ഫോട്ടോ ടാപ്പ് ചെയ്യുക',
     }
   };
 
@@ -110,19 +118,27 @@ class _PatientDashboardState extends State<PatientDashboard> {
             return;
           }
 
-          if (userDoc.data()?['name'] != null) {
+          if (mounted) {
             setState(() {
-              _patientName = _capitalize(userDoc['name']);
+              if (userDoc.data()?['name'] != null) {
+                _patientName = _capitalize(userDoc['name']);
+              }
+              _profileImageUrl = userDoc.data()?['profileImageUrl'];
             });
           }
         } else {
           // 2. Fallback to 'patients' collection if 'users' doc is missing 
           // (Legacy support, but still check if it exists)
           final patientDoc = await FirebaseFirestore.instance.collection('patients').doc(user.uid).get();
-          if (patientDoc.exists && patientDoc.data()?['name'] != null) {
-            setState(() {
-              _patientName = _capitalize(patientDoc['name']);
-            });
+          if (patientDoc.exists) {
+            if (mounted) {
+              setState(() {
+                if (patientDoc.data()?['name'] != null) {
+                  _patientName = _capitalize(patientDoc['name']);
+                }
+                _profileImageUrl = patientDoc.data()?['profileImageUrl'];
+              });
+            }
           } else {
             // If user exists in Auth but not in 'users' or 'patients' collections
             debugPrint("User profile not found in database.");
@@ -149,6 +165,285 @@ class _PatientDashboardState extends State<PatientDashboard> {
         ),
       );
     }
+  }
+
+  void _showPhotoOptions() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(24),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: 20),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const Text(
+              "Profile Photo",
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 24),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                _photoOptionItem(
+                  icon: Icons.camera_alt_rounded,
+                  label: "Camera",
+                  onTap: () {
+                    Navigator.pop(context);
+                    _pickImage(ImageSource.camera);
+                  },
+                ),
+                _photoOptionItem(
+                  icon: Icons.photo_library_rounded,
+                  label: "Gallery",
+                  onTap: () {
+                    Navigator.pop(context);
+                    _pickImage(ImageSource.gallery);
+                  },
+                ),
+                if (_profileImageUrl != null || _profileImage != null)
+                  _photoOptionItem(
+                    icon: Icons.delete_outline_rounded,
+                    label: "Delete",
+                    color: Colors.redAccent,
+                    onTap: () {
+                      Navigator.pop(context);
+                      _deleteProfilePicture();
+                    },
+                  ),
+              ],
+            ),
+            const SizedBox(height: 12),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _photoOptionItem({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+    Color? color,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+        child: Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: (color ?? accentColor).withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, color: color ?? accentColor, size: 28),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: color ?? Colors.grey.shade800,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickImage(ImageSource source) async {
+    try {
+      final pickedFile = await _imagePicker.pickImage(
+        source: source,
+        maxWidth: 512,
+        maxHeight: 512,
+        imageQuality: 75,
+      );
+
+      if (pickedFile != null) {
+        setState(() => _isLoadingProfile = true);
+        await _updateProfilePicture(File(pickedFile.path));
+      }
+    } catch (e) {
+      debugPrint("Error picking image: $e");
+      _showErrorSnackBar("Failed to pick image");
+    } finally {
+      setState(() => _isLoadingProfile = false);
+    }
+  }
+
+  Future<void> _updateProfilePicture(File image) async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+
+      // 1. Upload to Storage
+      final storageRef = FirebaseStorage.instance
+          .ref()
+          .child('profile_pictures')
+          .child('${user.uid}.jpg');
+
+      await storageRef.putFile(image);
+      final downloadUrl = await storageRef.getDownloadURL();
+
+      // 2. Update Firestore (both collections for consistency)
+      final batch = FirebaseFirestore.instance.batch();
+      
+      final userRef = FirebaseFirestore.instance.collection('users').doc(user.uid);
+      batch.update(userRef, {'profileImageUrl': downloadUrl});
+      
+      final patientRef = FirebaseFirestore.instance.collection('patients').doc(user.uid);
+      final patientDoc = await patientRef.get();
+      if (patientDoc.exists) {
+        batch.update(patientRef, {'profileImageUrl': downloadUrl});
+      }
+
+      await batch.commit();
+
+      if (mounted) {
+        setState(() {
+          _profileImage = image;
+          _profileImageUrl = downloadUrl;
+        });
+        _showSuccessPopup();
+      }
+    } catch (e) {
+      debugPrint("Error updating profile picture: $e");
+      _showErrorSnackBar("Failed to update profile picture");
+    }
+  }
+
+  Future<void> _deleteProfilePicture() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+
+      setState(() => _isLoadingProfile = true);
+
+      // 1. Remove from Storage
+      try {
+        await FirebaseStorage.instance
+            .ref()
+            .child('profile_pictures')
+            .child('${user.uid}.jpg')
+            .delete();
+      } catch (e) {
+        // Storage might be empty, just continue
+        debugPrint("Storage delete error (safe to ignore if file doesn't exist): $e");
+      }
+
+      // 2. Update Firestore
+      final batch = FirebaseFirestore.instance.batch();
+      
+      final userRef = FirebaseFirestore.instance.collection('users').doc(user.uid);
+      batch.update(userRef, {'profileImageUrl': FieldValue.delete()});
+      
+      final patientRef = FirebaseFirestore.instance.collection('patients').doc(user.uid);
+      final patientDoc = await patientRef.get();
+      if (patientDoc.exists) {
+        batch.update(patientRef, {'profileImageUrl': FieldValue.delete()});
+      }
+
+      await batch.commit();
+
+      if (mounted) {
+        setState(() {
+          _profileImage = null;
+          _profileImageUrl = null;
+        });
+        _showSuccessSnackBar("Profile picture deleted");
+      }
+    } catch (e) {
+      debugPrint("Error deleting profile picture: $e");
+      _showErrorSnackBar("Failed to delete profile picture");
+    } finally {
+      setState(() => _isLoadingProfile = false);
+    }
+  }
+
+  void _showSuccessPopup() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.green.withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.check_circle_rounded, color: Colors.green, size: 50),
+            ),
+            const SizedBox(height: 20),
+            const Text(
+              "Success!",
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 10),
+            const Text(
+              "Profile updated successfully",
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.grey),
+            ),
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () => Navigator.pop(ctx),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: accentColor,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                child: const Text("Awesome", style: TextStyle(fontWeight: FontWeight.bold)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showSuccessSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.green,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  void _showErrorSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
   }
 
   String _capitalize(String s) {
@@ -194,82 +489,255 @@ class _PatientDashboardState extends State<PatientDashboard> {
           _upcomingAppointments = appointments;
           _nextAppointment = appointments.isNotEmpty ? appointments.first : null;
         });
+
+        // Trigger proximity notifications for any appointment in the next 24 hours
+        for (var appointment in appointments) {
+          final date = (appointment['appodate'] as Timestamp?)?.toDate();
+          if (date != null) {
+            NotificationService().checkAndNotifyProximity(
+              id: appointment['id'],
+              title: '📅 Appointment Soon',
+              body: 'You have an appointment with Dr. ${appointment['doctorName'] ?? 'Doctor'} at ${appointment['timeSlot'] ?? 'soon'}',
+              scheduledTime: date,
+            );
+          }
+        }
       }
     });
   }
 
   void _showNotificationsSheet() {
+    final userId = FirebaseAuth.instance.currentUser?.uid ?? '';
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
-      builder: (ctx) => Container(
-        constraints: BoxConstraints(
-          maxHeight: MediaQuery.of(context).size.height * 0.7,
-        ),
-        padding: const EdgeInsets.all(24),
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
+      builder: (ctx) => DraggableScrollableSheet(
+        initialChildSize: 0.72,
+        maxChildSize: 0.92,
+        minChildSize: 0.4,
+        builder: (_, scrollController) => Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: Column(
+            children: [
+              // Handle
+              Container(
+                margin: const EdgeInsets.only(top: 12),
                 width: 40,
                 height: 4,
-                margin: const EdgeInsets.only(bottom: 20),
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade300,
-                  borderRadius: BorderRadius.circular(2),
+                decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)),
+              ),
+              // Header
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: accentColor.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(Icons.notifications_active_rounded, color: accentColor),
+                    ),
+                    const SizedBox(width: 12),
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text("Notifications", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                          Text("Scan results & updates", style: TextStyle(fontSize: 12, color: Colors.grey)),
+                        ],
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () => _markAllPatientNotificationsRead(userId),
+                      child: Text("Mark all read", style: TextStyle(color: accentColor, fontSize: 12)),
+                    ),
+                  ],
                 ),
               ),
-            ),
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: accentColor.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Icon(Icons.notifications_active_rounded, color: accentColor),
-                ),
-                const SizedBox(width: 12),
-                const Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        "Upcoming Appointments",
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                      ),
-                      Text(
-                        "Your scheduled visits",
-                        style: TextStyle(fontSize: 12, color: Colors.grey),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
-            if (_upcomingAppointments.isEmpty)
-              _buildNoAppointmentsMessage()
-            else
-              Flexible(
-                child: ListView.builder(
-                  shrinkWrap: true,
-                  itemCount: _upcomingAppointments.length > 5 ? 5 : _upcomingAppointments.length,
-                  itemBuilder: (ctx, index) => _buildNotificationCard(_upcomingAppointments[index], index == 0),
+              const Divider(height: 1),
+              // Combined notification list
+              Expanded(
+                child: StreamBuilder<QuerySnapshot>(
+                  stream: FirebaseFirestore.instance
+                      .collection('patient_notifications')
+                      .where('patientId', isEqualTo: userId)
+                      .snapshots(),
+                  builder: (context, snapshot) {
+                    final scanDocs = snapshot.data?.docs ?? [];
+                    final sorted = scanDocs.toList()
+                      ..sort((a, b) {
+                        final aT = (a.data() as Map<String, dynamic>)['createdAt'] as Timestamp?;
+                        final bT = (b.data() as Map<String, dynamic>)['createdAt'] as Timestamp?;
+                        if (aT == null || bT == null) return 0;
+                        return bT.compareTo(aT);
+                      });
+
+                    if (sorted.isEmpty && _upcomingAppointments.isEmpty) {
+                      return _buildNoAppointmentsMessage();
+                    }
+
+                    return ListView(
+                      controller: scrollController,
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      children: [
+                        // Scan result notifications
+                        ...sorted.map((doc) {
+                          final data = doc.data() as Map<String, dynamic>;
+                          final isRead = data['isRead'] == true;
+                          final severity = data['severity'] ?? 'N/A';
+                          final createdAt = data['createdAt'] as Timestamp?;
+
+                          Color severityColor;
+                          final sevL = severity.toString().toLowerCase();
+                          if (sevL.contains('critical') || sevL.contains('severe')) {
+                            severityColor = Colors.red;
+                          } else if (sevL.contains('moderate')) {
+                            severityColor = Colors.orange;
+                          } else {
+                            severityColor = const Color(0xFF10B981);
+                          }
+
+                          return GestureDetector(
+                            onTap: () async {
+                              await doc.reference.update({'isRead': true});
+                              if (ctx.mounted) Navigator.pop(ctx);
+                              if (mounted) {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(builder: (_) => const PatientMedicalHistoryPage()),
+                                );
+                              }
+                            },
+                            child: Container(
+                              margin: const EdgeInsets.only(bottom: 10),
+                              padding: const EdgeInsets.all(14),
+                              decoration: BoxDecoration(
+                                color: isRead ? Colors.white : accentColor.withValues(alpha: 0.04),
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(
+                                  color: isRead ? Colors.grey.shade200 : accentColor.withValues(alpha: 0.3),
+                                ),
+                              ),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(10),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF10B981).withValues(alpha: 0.1),
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: const Icon(Icons.biotech_rounded, color: Color(0xFF10B981), size: 20),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            const Expanded(
+                                              child: Text(
+                                                "Skin Scan Result Ready",
+                                                style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                                              ),
+                                            ),
+                                            if (!isRead)
+                                              Container(
+                                                width: 8, height: 8,
+                                                decoration: BoxDecoration(color: accentColor, shape: BoxShape.circle),
+                                              ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 3),
+                                        Text(
+                                          "Condition: ${data['prediction'] ?? 'Unknown'}",
+                                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Row(
+                                          children: [
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                              decoration: BoxDecoration(
+                                                color: severityColor.withValues(alpha: 0.1),
+                                                borderRadius: BorderRadius.circular(6),
+                                              ),
+                                              child: Text(severity, style: TextStyle(fontSize: 10, color: severityColor, fontWeight: FontWeight.bold)),
+                                            ),
+                                            const Spacer(),
+                                            Text(
+                                              createdAt != null ? _formatNotifDate(createdAt.toDate()) : '',
+                                              style: TextStyle(fontSize: 10, color: Colors.grey.shade500),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          "Tap to view full report →",
+                                          style: TextStyle(fontSize: 11, color: accentColor, fontWeight: FontWeight.w600),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        }),
+
+                        // Upcoming appointments section
+                        if (_upcomingAppointments.isNotEmpty) ...[
+                          const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 8),
+                            child: Text("Upcoming Appointments", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.grey)),
+                          ),
+                          ...List.generate(
+                            _upcomingAppointments.length > 3 ? 3 : _upcomingAppointments.length,
+                            (i) => _buildNotificationCard(_upcomingAppointments[i], i == 0),
+                          ),
+                        ],
+                      ],
+                    );
+                  },
                 ),
               ),
-          ],
+            ],
+          ),
         ),
       ),
     );
+  }
+
+  String _formatNotifDate(DateTime dt) {
+    final diff = DateTime.now().difference(dt);
+    if (diff.inMinutes < 1) return 'Just now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    return '${dt.day}/${dt.month}/${dt.year}';
+  }
+
+  Future<void> _markAllPatientNotificationsRead(String userId) async {
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('patient_notifications')
+          .where('patientId', isEqualTo: userId)
+          .where('isRead', isEqualTo: false)
+          .get();
+      final batch = FirebaseFirestore.instance.batch();
+      for (final doc in snap.docs) {
+        batch.update(doc.reference, {'isRead': true});
+      }
+      await batch.commit();
+    } catch (e) {
+      debugPrint('Error marking notifications read: $e');
+    }
   }
 
   Widget _buildNoAppointmentsMessage() {
@@ -412,181 +880,6 @@ class _PatientDashboardState extends State<PatientDashboard> {
   }
 
 
-  // 📸 Pick image from camera
-  Future<void> _pickImageFromCamera() async {
-    try {
-      final XFile? image = await _imagePicker.pickImage(
-        source: ImageSource.camera,
-        imageQuality: 80,
-        maxWidth: 500,
-        maxHeight: 500,
-      );
-      if (image != null) {
-        setState(() {
-          _profileImage = File(image.path);
-        });
-        Navigator.pop(context); // Close the bottom sheet
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Row(
-              children: [
-                Icon(Icons.check_circle, color: Colors.white),
-                SizedBox(width: 8),
-                Text('Profile photo updated!'),
-              ],
-            ),
-            backgroundColor: accentColor,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          ),
-        );
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
-      );
-    }
-  }
-
-  // 🖼️ Pick image from gallery
-  Future<void> _pickImageFromGallery() async {
-    try {
-      final XFile? image = await _imagePicker.pickImage(
-        source: ImageSource.gallery,
-        imageQuality: 80,
-        maxWidth: 500,
-        maxHeight: 500,
-      );
-      if (image != null) {
-        setState(() {
-          _profileImage = File(image.path);
-        });
-        Navigator.pop(context); // Close the bottom sheet
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Row(
-              children: [
-                Icon(Icons.check_circle, color: Colors.white),
-                SizedBox(width: 8),
-                Text('Profile photo updated!'),
-              ],
-            ),
-            backgroundColor: accentColor,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          ),
-        );
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
-      );
-    }
-  }
-
-  // 📋 Show photo picker options
-  void _showPhotoOptions() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => Container(
-        padding: const EdgeInsets.all(24),
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 40,
-              height: 4,
-              margin: const EdgeInsets.only(bottom: 20),
-              decoration: BoxDecoration(
-                color: Colors.grey.shade300,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const Text(
-              "Change Profile Photo",
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              "Choose how you want to update your photo",
-              style: TextStyle(color: Colors.grey.shade600),
-            ),
-            const SizedBox(height: 24),
-            Row(
-              children: [
-                Expanded(
-                  child: _photoOptionCard(
-                    icon: Icons.camera_alt_rounded,
-                    label: "Camera",
-                    color: accentColor,
-                    onTap: _pickImageFromCamera,
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: _photoOptionCard(
-                    icon: Icons.photo_library_rounded,
-                    label: "Gallery",
-                    color: const Color(0xFF8B5CF6),
-                    onTap: _pickImageFromGallery,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            if (_profileImage != null)
-              TextButton.icon(
-                onPressed: () {
-                  setState(() => _profileImage = null);
-                  Navigator.pop(context);
-                },
-                icon: const Icon(Icons.delete_rounded, color: Colors.red),
-                label: const Text("Remove Photo", style: TextStyle(color: Colors.red)),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _photoOptionCard({
-    required IconData icon,
-    required String label,
-    required Color color,
-    required VoidCallback onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 20),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: color.withValues(alpha: 0.3)),
-        ),
-        child: Column(
-          children: [
-            Icon(icon, size: 36, color: color),
-            const SizedBox(height: 8),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-                color: color,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -610,22 +903,29 @@ class _PatientDashboardState extends State<PatientDashboard> {
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 8),
-            child: IconButton(
-              icon: Badge(
-                label: Text(
-                  '${_upcomingAppointments.length}',
-                  style: const TextStyle(fontSize: 10),
-                ),
-                isLabelVisible: _upcomingAppointments.isNotEmpty,
-                backgroundColor: Colors.orange,
-                child: Icon(
-                  _upcomingAppointments.isNotEmpty 
-                      ? Icons.notifications_active_rounded 
-                      : Icons.notifications_none_rounded,
-                  color: _upcomingAppointments.isNotEmpty ? accentColor : textColor,
-                ),
-              ),
-              onPressed: _showNotificationsSheet,
+            child: StreamBuilder<QuerySnapshot>(
+              stream: FirebaseFirestore.instance
+                  .collection('patient_notifications')
+                  .where('patientId', isEqualTo: FirebaseAuth.instance.currentUser?.uid)
+                  .where('isRead', isEqualTo: false)
+                  .snapshots(),
+              builder: (context, snapshot) {
+                final unread = snapshot.data?.docs.length ?? 0;
+                return IconButton(
+                  icon: Badge(
+                    label: Text('$unread', style: const TextStyle(fontSize: 10)),
+                    isLabelVisible: unread > 0,
+                    backgroundColor: Colors.red,
+                    child: Icon(
+                      unread > 0
+                          ? Icons.notifications_active_rounded
+                          : Icons.notifications_none_rounded,
+                      color: unread > 0 ? accentColor : textColor,
+                    ),
+                  ),
+                  onPressed: _showNotificationsSheet,
+                );
+              },
             ),
           ),
         ],
@@ -729,29 +1029,53 @@ class _PatientDashboardState extends State<PatientDashboard> {
         children: [
           /// Drawer Header with tappable profile photo
           DrawerHeader(
+            padding: EdgeInsets.zero,
+            margin: EdgeInsets.zero,
             decoration: BoxDecoration(
               gradient: LinearGradient(
-                colors: [accentColor, accentColor.withOpacity(0.7)],
+                colors: [accentColor, accentColor.withValues(alpha: 0.85)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
               ),
             ),
             child: Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   GestureDetector(
                     onTap: _showPhotoOptions,
                     child: Stack(
+                      alignment: Alignment.center,
                       children: [
                         CircleAvatar(
                           radius: 38,
                           backgroundColor: Colors.white24,
                           backgroundImage: _profileImage != null 
                               ? FileImage(_profileImage!) 
-                              : null,
-                          child: _profileImage == null
-                              ? const Icon(Icons.person, color: Colors.white, size: 40)
+                              : (_profileImageUrl != null && _profileImageUrl!.isNotEmpty 
+                                  ? NetworkImage(_profileImageUrl!) 
+                                  : null) as ImageProvider?,
+                          child: _profileImage == null && (_profileImageUrl == null || _profileImageUrl!.isEmpty)
+                              ? const Icon(Icons.person_rounded, color: Colors.white, size: 45)
                               : null,
                         ),
+                        if (_isLoadingProfile)
+                          Positioned.fill(
+                            child: Container(
+                              decoration: const BoxDecoration(
+                                color: Colors.black26, 
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Center(
+                                child: SizedBox(
+                                  width: 40, 
+                                  height: 40,
+                                  child: CircularProgressIndicator(color: Colors.white, strokeWidth: 3),
+                                ),
+                              ),
+                            ),
+                          ),
                         Positioned(
                           right: 0,
                           bottom: 0,
@@ -760,27 +1084,46 @@ class _PatientDashboardState extends State<PatientDashboard> {
                             decoration: BoxDecoration(
                               color: Colors.white,
                               shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.1),
+                                  blurRadius: 4,
+                                ),
+                              ],
                               border: Border.all(color: accentColor, width: 2),
                             ),
-                            child: Icon(Icons.camera_alt_rounded, size: 16, color: accentColor),
+                            child: Icon(Icons.camera_alt_rounded, size: 14, color: accentColor),
                           ),
                         ),
                       ],
                     ),
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 12),
                   Text(
-                    _patientName,
-                    style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                    _patientName.isNotEmpty 
+                        ? _patientName 
+                        : (FirebaseAuth.instance.currentUser?.displayName ?? _t('patient')),
+                    style: const TextStyle(
+                      color: Colors.white, 
+                      fontSize: 18, 
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 0.5,
+                    ),
+                    textAlign: TextAlign.center,
                   ),
-                  const Text(
-                    "Tap photo to change",
-                    style: TextStyle(color: Colors.white70, fontSize: 11),
+                  Text(
+                    _t('tap_to_change'),
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.8), 
+                      fontSize: 11,
+                    ),
                   ),
                 ],
               ),
             ),
           ),
+          
+          const SizedBox(height: 8),
 
           /// Drawer List Items
           Expanded(
@@ -788,7 +1131,6 @@ class _PatientDashboardState extends State<PatientDashboard> {
               padding: EdgeInsets.zero,
               children: [
                 _drawerTile(Icons.home_rounded, _t('home'), () => Navigator.pop(context)),
-                ///_drawerTile(Icons.person_outline_rounded, "My Profile", () {}),
                 _drawerTile(Icons.language_rounded, _t('language'), _showLanguageDialog),
                 _drawerTile(Icons.contact_support_outlined, _t('contact'), _showContactUs),
                 _drawerTile(Icons.description_outlined, _t('terms'), _showTermsAndConditions),
@@ -799,7 +1141,7 @@ class _PatientDashboardState extends State<PatientDashboard> {
                     Navigator.pushAndRemoveUntil(
                       context, 
                       MaterialPageRoute(builder: (_) => const LandingPage()), 
-                      (route) => false
+                      (route) => false,
                     );
                   }
                 }, color: Colors.redAccent),
@@ -810,7 +1152,7 @@ class _PatientDashboardState extends State<PatientDashboard> {
           Padding(
             padding: const EdgeInsets.all(20.0),
             child: Text("v1.0.0", style: TextStyle(color: Colors.grey[400], fontSize: 12)),
-          )
+          ),
         ],
       ),
     );

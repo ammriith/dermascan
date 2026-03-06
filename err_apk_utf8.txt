@@ -1,0 +1,274 @@
+﻿Running Gradle task 'assembleDebug'...                          
+flutter : lib/doctor/doctor_s
+lots_page.dart:58:22: Error: 
+A method declaration needs 
+an explicit list of 
+parameters.
+At line:1 char:1
++ flutter build apk --debug 
+> err_apk.txt 2>&1
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~
+    + CategoryInfo           
+   : NotSpecified: (lib/doc  
+  tor/doct... of parameter   
+ s.:String) [], RemoteExc    
+eption
+    + FullyQualifiedErrorId  
+   : NativeCommandError
+ 
+Try adding a parameter list 
+to the method declaration.
+  static const Color 
+theme.cardColor = 
+Colors.white;
+                     ^^^^^
+lib/doctor/doctor_slots_page.
+dart:58:38: Error: Only 
+factory constructor can 
+specify '=' redirection.
+Try making this a factory 
+constructor, or remove the 
+redirection.
+  static const Color 
+theme.cardColor = 
+Colors.white;
+                             
+        ^
+lib/doctor/doctor_slots_page.
+dart:58:22: Error: The name 
+of a constructor must match 
+the name of the enclosing 
+class.
+  static const Color 
+theme.cardColor = 
+Colors.white;
+                     ^^^^^
+lib/doctor/doctor_slots_page.
+dart:58:3: Error: 
+Constructors can't be static.
+Try removing the keyword 
+'static'.
+  static const Color 
+theme.cardColor = 
+Colors.white;
+  ^^^^^^
+lib/doctor/doctor_slots_page.
+dart:58:16: Error: 
+Constructors can't have a 
+return type.
+Try removing the return type.
+  static const Color 
+theme.cardColor = 
+Colors.white;
+               ^^^^^
+lib/doctor/doctor_slots_page.
+dart:58:10: Error: A const 
+constructor can't have a 
+body.
+Try removing either the 
+'const' keyword or the body.
+  static const Color 
+theme.cardColor = 
+Colors.white;
+         ^^^^^
+lib/doctor/doctor_slots_page.
+dart:59:22: Error: A method 
+declaration needs an 
+explicit list of parameters.
+Try adding a parameter list 
+to the method declaration.
+  static const Color 
+theme.colorScheme.onSurface 
+= Color(0xFF1F2937);
+                     ^^^^^
+lib/doctor/doctor_slots_page.
+dart:59:39: Error: Expected 
+'{' before this.
+  static const Color 
+theme.colorScheme.onSurface 
+= Color(0xFF1F2937);
+                             
+         ^
+lib/doctor/doctor_slots_page.
+dart:59:22: Error: The name 
+of a constructor must match 
+the name of the enclosing 
+class.
+  static const Color 
+theme.colorScheme.onSurface 
+= Color(0xFF1F2937);
+                     ^^^^^
+lib/doctor/doctor_slots_page.
+dart:59:3: Error: 
+Constructors can't be static.
+Try removing the keyword 
+'static'.
+  static const Color 
+theme.colorScheme.onSurface 
+= Color(0xFF1F2937);
+  ^^^^^^
+lib/doctor/doctor_slots_page.
+dart:59:16: Error: 
+Constructors can't have a 
+return type.
+Try removing the return type.
+  static const Color 
+theme.colorScheme.onSurface 
+= Color(0xFF1F2937);
+               ^^^^^
+lib/doctor/doctor_slots_page.
+dart:59:10: Error: A const 
+constructor can't have a 
+body.
+Try removing either the 
+'const' keyword or the body.
+  static const Color 
+theme.colorScheme.onSurface 
+= Color(0xFF1F2937);
+         ^^^^^
+lib/doctor/doctor_slots_page.
+dart:59:39: Error: Expected 
+a class member, but got '.'.
+  static const Color 
+theme.colorScheme.onSurface 
+= Color(0xFF1F2937);
+                             
+         ^
+lib/doctor/doctor_slots_page.
+dart:59:40: Error: Variables 
+must be declared using the 
+keywords 'const', 'final', 
+'var' or a type name.
+Try adding the name of the 
+type of the variable or the 
+keyword 'var'.
+  static const Color 
+theme.colorScheme.onSurface 
+= Color(0xFF1F2937);
+                             
+          ^^^^^^^^^
+lib/doctor/doctor_slots_page.
+dart:9:43: Error: Couldn't 
+find constructor 
+'_DoctorSlotsPageState'.
+  State<DoctorSlotsPage> 
+createState() => 
+_DoctorSlotsPageState();
+                             
+             
+^^^^^^^^^^^^^^^^^^^^^
+lib/doctor/doctor_slots_page.
+dart:58:38: Error: Expected 
+a function body or '=>'.
+Try adding {}.
+  static const Color 
+theme.cardColor = 
+Colors.white;
+                             
+        ^
+lib/doctor/doctor_slots_page.
+dart:58:40: Error: 
+Constructors can't have a 
+return type.
+Try removing the return type.
+  static const Color 
+theme.cardColor = 
+Colors.white;
+                             
+          ^
+lib/doctor/doctor_slots_page.
+dart:377:84: Error: Not a 
+constant expression.
+          style: const 
+TextStyle(fontSize: 22, 
+fontWeight: FontWeight.bold, 
+color: 
+theme.colorScheme.onSurface),
+                             
+                             
+                         
+^^^^^
+lib/doctor/doctor_slots_page.
+dart:377:90: Error: Not a 
+constant expression.
+          style: const 
+TextStyle(fontSize: 22, 
+fontWeight: FontWeight.bold, 
+color: 
+theme.colorScheme.onSurface),
+                             
+                             
+                             
+  ^^^^^^^^^^^
+lib/doctor/doctor_slots_page.
+dart:397:37: Error: The 
+getter 'theme' isn't defined 
+for the type 
+'_DoctorSlotsPageState'.
+ - '_DoctorSlotsPageState' 
+is from 'package:dermascan/do
+ctor/doctor_slots_page.dart' 
+('lib/doctor/doctor_slots_pag
+e.dart').
+Try correcting the name to 
+the name of an existing 
+getter, or defining a getter 
+or field named 'theme'.
+        color: 
+schedule.isEnabled ? 
+theme.cardColor : 
+Colors.grey.shade100,
+                             
+       ^^^^^
+lib/doctor/doctor_slots_page.
+dart:435:53: Error: The 
+getter 'theme' isn't defined 
+for the type 
+'_DoctorSlotsPageState'.
+ - '_DoctorSlotsPageState' 
+is from 'package:dermascan/do
+ctor/doctor_slots_page.dart' 
+('lib/doctor/doctor_slots_pag
+e.dart').
+Try correcting the name to 
+the name of an existing 
+getter, or defining a getter 
+or field named 'theme'.
+                        
+color: schedule.isEnabled ? 
+theme.colorScheme.onSurface 
+: Colors.grey,
+                             
+                       ^^^^^
+Target 
+kernel_snapshot_program 
+failed: Exception
+
+
+FAILURE: Build failed with 
+an exception.
+
+* What went wrong:
+Execution failed for task ':a
+pp:compileFlutterBuildDebug'.
+> Process 'command 'C:\flutte
+r\bin\flutter.bat'' finished 
+with non-zero exit value 1
+
+* Try:
+> Run with --stacktrace 
+option to get the stack 
+trace.
+> Run with --info or --debug 
+option to get more log 
+output.
+> Run with --scan to get 
+full insights.
+> Get more help at 
+https://help.gradle.org.
+
+BUILD FAILED in 8s
+Running Gradle task 'assembleDebug'...                              8.4s
+Gradle task assembleDebug 
+failed with exit code 1

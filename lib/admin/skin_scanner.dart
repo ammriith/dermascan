@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:dermascan/services/ai_service.dart';
 
@@ -50,7 +51,11 @@ class _SkinScannerPageState extends State<SkinScannerPage> with TickerProviderSt
   Map<String, dynamic>? _analysisResult;
   String? _selectedPatientId;
   String? _selectedPatientName;
-  
+
+  // Manually selected doctor to send report to
+  String? _selectedDoctorId;
+  String? _selectedDoctorName;
+
   late AnimationController _pulseController;
   late Animation<double> _pulseAnimation;
 
@@ -193,16 +198,112 @@ class _SkinScannerPageState extends State<SkinScannerPage> with TickerProviderSt
     }
     
     try {
-      await _firestore.collection('predictions').add({
+      // 1. Determine the target doctor:
+      //    Priority: manually selected → auto-detected from upcoming appointment
+      String? assignedDoctorId = _selectedDoctorId;
+      String? assignedDoctorName = _selectedDoctorName;
+
+      if (assignedDoctorId == null) {
+        // Auto-detect from soonest upcoming appointment
+        final now = Timestamp.now();
+        final appointmentSnap = await _firestore
+            .collection('appointments')
+            .where('patientId', isEqualTo: _selectedPatientId)
+            .get();
+
+        if (appointmentSnap.docs.isNotEmpty) {
+          final upcoming = appointmentSnap.docs.where((doc) {
+            final data = doc.data();
+            final apDate = data['appodate'] as Timestamp?;
+            final status = (data['status'] as String? ?? '').toLowerCase();
+            return apDate != null &&
+                apDate.compareTo(now) >= 0 &&
+                status != 'cancelled' &&
+                status != 'completed';
+          }).toList();
+
+          if (upcoming.isNotEmpty) {
+            upcoming.sort((a, b) {
+              final aDate = a.data()['appodate'] as Timestamp;
+              final bDate = b.data()['appodate'] as Timestamp;
+              return aDate.compareTo(bDate);
+            });
+            final closestAppt = upcoming.first.data();
+            assignedDoctorId = closestAppt['doctorId'] as String?;
+            assignedDoctorName = closestAppt['doctor_name'] as String?;
+          }
+        }
+      }
+
+      // 2. Upload image to Firebase Storage (NEW: Image Persistence)
+      String? imageUrl;
+      if (_selectedImage != null) {
+        try {
+          final storageRef = FirebaseStorage.instance.ref()
+              .child('skin_scans')
+              .child('${_selectedPatientId}_${DateTime.now().millisecondsSinceEpoch}.jpg');
+          
+          final UploadTask uploadTask = storageRef.putFile(_selectedImage!);
+          final TaskSnapshot snapshot = await uploadTask;
+          imageUrl = await snapshot.ref.getDownloadURL();
+          debugPrint('[SkinScanner] Image uploaded successfully: $imageUrl');
+        } catch (e) {
+          debugPrint('[SkinScanner] Image upload failed: $e');
+          // We continue saving even if upload fails, but with no image
+        }
+      }
+
+      // 3. Save the scan result (with doctorId and imageUrl if found)
+      final docRef = await _firestore.collection('predictions').add({
         'patientId': _selectedPatientId,
         'patientName': _selectedPatientName,
         'prediction': _analysisResult!['condition'],
         'confidence': _analysisResult!['confidence'],
-        'severity': _analysisResult!['severity'],
-        'recommendations': _analysisResult!['recommendations'],
+        'severity': _analysisResult!['severity'] ?? 'Moderate',
+        'recommendations': _analysisResult!['recommendations'] ?? [],
+        'description': _analysisResult!['description'] ?? '',
+        'symptoms': _analysisResult!['symptoms'] ?? [],
+        'differentials': _analysisResult!['differentials'] ?? [],
+        'imageUrl': imageUrl, // The uploaded scan image
         'analyzedBy': _auth.currentUser?.uid,
         'createdAt': FieldValue.serverTimestamp(),
         'sentToStaff': false,
+        if (assignedDoctorId != null) 'doctorId': assignedDoctorId,
+        if (assignedDoctorId != null) 'sentToDoctor': true,
+      });
+
+      // 3. Notify the doctor if one was found
+      if (assignedDoctorId != null) {
+        await _firestore.collection('doctor_notifications').add({
+          'doctorId': assignedDoctorId,
+          'type': 'scan_result',
+          'title': 'New AI Scan Result',
+          'message': 'Patient ${_selectedPatientName ?? "Unknown"} has a new skin scan result: ${_analysisResult!['condition']}',
+          'patientId': _selectedPatientId,
+          'patientName': _selectedPatientName,
+          'predictionId': docRef.id,
+          'prediction': _analysisResult!['condition'],
+          'confidence': _analysisResult!['confidence'],
+          'severity': _analysisResult!['severity'],
+          'isRead': false,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+      }
+
+      // 4. Always notify the patient so they can view their result
+      await _firestore.collection('patient_notifications').add({
+        'patientId': _selectedPatientId,
+        'type': 'scan_result',
+        'title': 'Your AI Skin Scan Result is Ready',
+        'message': 'Your scan has been analysed. Detected condition: ${_analysisResult!['condition']}. Tap to view your full report.',
+        'predictionId': docRef.id,
+        'prediction': _analysisResult!['condition'],
+        'confidence': _analysisResult!['confidence'],
+        'severity': _analysisResult!['severity'],
+        'sentByDoctor': assignedDoctorId != null,
+        'doctorName': assignedDoctorName,
+        'isRead': false,
+        'createdAt': FieldValue.serverTimestamp(),
       });
       
       if (mounted) {
@@ -212,12 +313,19 @@ class _SkinScannerPageState extends State<SkinScannerPage> with TickerProviderSt
               children: [
                 const Icon(Icons.check_circle, color: Colors.white),
                 const SizedBox(width: 8),
-                const Flexible(child: Text('Result saved successfully!')),
+                Flexible(
+                  child: Text(
+                    assignedDoctorId != null
+                        ? 'Result saved & sent to Dr. ${assignedDoctorName ?? "your doctor"}!'
+                        : 'Result saved successfully!',
+                  ),
+                ),
               ],
             ),
             backgroundColor: greenAccent,
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            duration: const Duration(seconds: 4),
           ),
         );
         
@@ -777,18 +885,47 @@ class _SkinScannerPageState extends State<SkinScannerPage> with TickerProviderSt
 
   Widget _buildResultsSection() {
     final condition = _analysisResult!['condition'] as String;
-    final confidence = (_analysisResult!['confidence'] as double) * 100;
-    final severity = _analysisResult!['severity'] as String;
-    final description = _analysisResult!['description'] as String? ?? '';
-    final recommendations = _analysisResult!['recommendations'] as List<String>;
-    final symptoms = _analysisResult!['symptoms'] as List<String>? ?? [];
+    final rawConf = _analysisResult!['confidence'];
+    final confidence = ((rawConf is num ? rawConf.toDouble() : (double.tryParse(rawConf?.toString() ?? '') ?? 0.75))) * 100;
+    final severity = (_analysisResult!['severity'] as String?) ?? 'Moderate';
+    final description = (_analysisResult!['description'] as String?) ?? '';
+    final rawRecs = _analysisResult!['recommendations'];
+    final recommendations = rawRecs is List<String> ? rawRecs : (rawRecs as List?)?.map((e) => e.toString()).toList() ?? <String>[];
+    final rawSymptoms = _analysisResult!['symptoms'];
+    final symptoms = rawSymptoms is List<String> ? rawSymptoms : (rawSymptoms as List?)?.map((e) => e.toString()).toList() ?? <String>[];
+    final isOffline = _analysisResult!['isOfflineFallback'] == true;
     
-    Color severityColor = severity.toLowerCase().contains('high') || severity.toLowerCase().contains('critical') ? redAccent : 
-                          severity.toLowerCase().contains('moderate') ? orangeAccent : greenAccent;
+    final sevLower = severity.toLowerCase();
+    Color severityColor = sevLower.contains('critical') || sevLower.contains('severe') ? redAccent : 
+                          sevLower.contains('moderate') ? orangeAccent : greenAccent;
     
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // Offline banner
+        if (isOffline)
+          Container(
+            margin: const EdgeInsets.only(bottom: 16),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: orangeAccent.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: orangeAccent.withValues(alpha: 0.4)),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.cloud_off_rounded, color: orangeAccent, size: 20),
+                const SizedBox(width: 10),
+                const Expanded(
+                  child: Text(
+                    "AI quota reached — showing offline estimate. Retry later for Gemini-powered diagnosis.",
+                    style: TextStyle(fontSize: 12, color: Color(0xFFF59E0B), fontWeight: FontWeight.w500),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
         // Main result card
         Container(
           padding: const EdgeInsets.all(24),
@@ -922,6 +1059,93 @@ class _SkinScannerPageState extends State<SkinScannerPage> with TickerProviderSt
           ),
         ),
         
+        const SizedBox(height: 24),
+
+        // ── Send to Doctor selector ──────────────────────────────────
+        const Text(
+          'Send Report to Doctor',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textPrimary),
+        ),
+        const SizedBox(height: 12),
+        GestureDetector(
+          onTap: _showDoctorPickerSheet,
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: cardColor,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(
+                color: _selectedDoctorId != null
+                    ? primaryColor.withValues(alpha: 0.6)
+                    : Colors.grey.shade200,
+                width: _selectedDoctorId != null ? 2 : 1,
+              ),
+              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8)],
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: _selectedDoctorId != null
+                        ? primaryColor.withValues(alpha: 0.1)
+                        : Colors.grey.shade100,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Icon(
+                    _selectedDoctorId != null
+                        ? Icons.local_hospital_rounded
+                        : Icons.person_add_alt_1_rounded,
+                    color: _selectedDoctorId != null ? primaryDark : Colors.grey.shade500,
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _selectedDoctorId != null
+                            ? 'Dr. $_selectedDoctorName'
+                            : 'Select a Doctor',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                          color: _selectedDoctorId != null ? textPrimary : Colors.grey.shade500,
+                        ),
+                      ),
+                      Text(
+                        _selectedDoctorId != null
+                            ? 'Tap to change selection'
+                            : 'Report will be sent to selected doctor',
+                        style: const TextStyle(fontSize: 12, color: textSecondary),
+                      ),
+                    ],
+                  ),
+                ),
+                if (_selectedDoctorId != null)
+                  GestureDetector(
+                    onTap: () => setState(() {
+                      _selectedDoctorId = null;
+                      _selectedDoctorName = null;
+                    }),
+                    child: Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: Colors.red.shade50,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(Icons.close_rounded, size: 16, color: Colors.red.shade400),
+                    ),
+                  )
+                else
+                  Icon(Icons.chevron_right_rounded, color: Colors.grey.shade400),
+              ],
+            ),
+          ),
+        ),
+
         const SizedBox(height: 32),
         
         // Action buttons
@@ -935,6 +1159,8 @@ class _SkinScannerPageState extends State<SkinScannerPage> with TickerProviderSt
                     setState(() {
                       _selectedImage = null;
                       _analysisResult = null;
+                      _selectedDoctorId = null;
+                      _selectedDoctorName = null;
                     });
                   },
                   icon: const Icon(Icons.refresh_rounded),
@@ -964,8 +1190,8 @@ class _SkinScannerPageState extends State<SkinScannerPage> with TickerProviderSt
                 ),
                 child: ElevatedButton.icon(
                   onPressed: _saveResult,
-                  icon: const Icon(Icons.save_rounded),
-                  label: const Text("Save Result"),
+                  icon: const Icon(Icons.send_rounded),
+                  label: const Text("Save & Send"),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.transparent,
                     shadowColor: Colors.transparent,
@@ -980,6 +1206,157 @@ class _SkinScannerPageState extends State<SkinScannerPage> with TickerProviderSt
       ],
     );
   }
+
+  /// Bottom sheet for selecting a doctor
+  void _showDoctorPickerSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => DraggableScrollableSheet(
+        initialChildSize: 0.65,
+        maxChildSize: 0.9,
+        minChildSize: 0.4,
+        builder: (_, scrollController) => Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          child: Column(
+            children: [
+              Container(
+                margin: const EdgeInsets.only(top: 12),
+                width: 40, height: 4,
+                decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: primaryColor.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(Icons.local_hospital_rounded, color: primaryDark),
+                    ),
+                    const SizedBox(width: 14),
+                    const Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text("Select Doctor", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textPrimary)),
+                        Text("Send report to a specific doctor", style: TextStyle(fontSize: 12, color: textSecondary)),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(height: 1),
+              Expanded(
+                child: FutureBuilder<QuerySnapshot>(
+                  future: _firestore.collection('doctors').get(),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(child: CircularProgressIndicator(color: primaryColor));
+                    }
+                    final docs = snapshot.data?.docs ?? [];
+                    if (docs.isEmpty) {
+                      return Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.person_off_rounded, size: 56, color: Colors.grey.shade300),
+                            const SizedBox(height: 12),
+                            Text("No doctors found", style: TextStyle(color: Colors.grey.shade500)),
+                          ],
+                        ),
+                      );
+                    }
+                    return ListView.builder(
+                      controller: scrollController,
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                      itemCount: docs.length,
+                      itemBuilder: (context, index) {
+                        final data = docs[index].data() as Map<String, dynamic>;
+                        final docId = docs[index].id;
+                        final name = data['name'] as String? ?? 'Unknown Doctor';
+                        final spec = data['specialization'] as String? ?? 'Specialist';
+                        final isSelected = _selectedDoctorId == docId;
+
+                        return GestureDetector(
+                          onTap: () {
+                            setState(() {
+                              _selectedDoctorId = docId;
+                              _selectedDoctorName = name;
+                            });
+                            Navigator.pop(ctx);
+                          },
+                          child: Container(
+                            margin: const EdgeInsets.only(bottom: 10),
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: isSelected ? primaryColor.withValues(alpha: 0.06) : Colors.white,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(
+                                color: isSelected ? primaryColor.withValues(alpha: 0.5) : Colors.grey.shade200,
+                                width: isSelected ? 2 : 1,
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 46, height: 46,
+                                  decoration: BoxDecoration(
+                                    gradient: LinearGradient(
+                                      colors: [primaryColor, primaryDark],
+                                      begin: Alignment.topLeft,
+                                      end: Alignment.bottomRight,
+                                    ),
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
+                                  child: Center(
+                                    child: Text(
+                                      name.isNotEmpty ? name[0].toUpperCase() : 'D',
+                                      style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 14),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Dr. $name',
+                                        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: textPrimary),
+                                      ),
+                                      Text(spec, style: const TextStyle(fontSize: 12, color: textSecondary)),
+                                    ],
+                                  ),
+                                ),
+                                if (isSelected)
+                                  Container(
+                                    padding: const EdgeInsets.all(4),
+                                    decoration: const BoxDecoration(color: primaryColor, shape: BoxShape.circle),
+                                    child: const Icon(Icons.check_rounded, color: Colors.white, size: 14),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
 
   Widget _buildResultStat(String label, String value, Color color) {
     return Container(

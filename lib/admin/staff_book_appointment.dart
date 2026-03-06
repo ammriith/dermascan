@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:dermascan/services/email_service.dart';
@@ -791,7 +791,7 @@ class _StaffBookAppointmentPageState extends State<StaffBookAppointmentPage> {
                 return DropdownMenuItem(
                   key: ValueKey('patient_option_$idx'),
                   value: doc.id,
-                  child: Text(doc['name'] ?? 'Unknown'),
+                  child: Text(doc['name'] ?? 'Unknown', overflow: TextOverflow.ellipsis, maxLines: 1),
                 );
               }).toList(),
               onChanged: (val) {
@@ -836,7 +836,7 @@ class _StaffBookAppointmentPageState extends State<StaffBookAppointmentPage> {
                   child: Row(
                     children: [
                       Expanded(
-                        child: Text("Dr. ${doc['name']} (${doc['specialization']})"),
+                        child: Text("Dr. ${doc['name']} (${doc['specialization']})", overflow: TextOverflow.ellipsis, maxLines: 1),
                       ),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),

@@ -35,7 +35,6 @@ class _ViewDoctorsPageState extends State<ViewDoctorsPage> {
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
             .collection('doctors')
-            .orderBy('createdAt', descending: true)
             .snapshots(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
@@ -55,7 +54,19 @@ class _ViewDoctorsPageState extends State<ViewDoctorsPage> {
             );
           }
 
-          final doctors = snapshot.data?.docs ?? [];
+          final doctorsDocs = snapshot.data?.docs ?? [];
+          
+          // Convert to list for client-side sorting
+          var doctors = doctorsDocs.toList();
+          
+          // Client-side sort by createdAt (descending)
+          doctors.sort((a, b) {
+            final aData = a.data() as Map<String, dynamic>;
+            final bData = b.data() as Map<String, dynamic>;
+            final aTime = (aData['createdAt'] as Timestamp?)?.toDate() ?? DateTime(2000);
+            final bTime = (bData['createdAt'] as Timestamp?)?.toDate() ?? DateTime(2000);
+            return bTime.compareTo(aTime);
+          });
 
           if (doctors.isEmpty) {
             return Center(

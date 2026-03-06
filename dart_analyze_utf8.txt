@@ -1,0 +1,425 @@
+﻿Analyzing ....
+
+  error - lib\admin\appointments_page.dart:185:53 - Methods can't be invoked in constant expressions. - const_eval_method_invocation
+  error - lib\admin\appointments_page.dart:327:70 - Invalid constant value. - invalid_constant
+  error - lib\admin\appointments_page.dart:530:84 - Invalid constant value. - invalid_constant
+  error - lib\admin\appointments_page.dart:550:64 - Undefined name 'textSecondary'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\admin\appointments_page.dart:589:71 - Undefined name 'cardColor'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\admin\appointments_page.dart:606:87 - Undefined name 'textSecondary'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\admin\appointments_page.dart:615:85 - Undefined name 'textPrimary'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\admin\appointments_page.dart:622:87 - Undefined name 'textSecondary'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\admin\appointments_page.dart:702:52 - Undefined name 'cardColor'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\admin\appointments_page.dart:714:56 - Undefined name 'textSecondary'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\admin\appointments_page.dart:737:82 - Invalid constant value. - invalid_constant
+  error - lib\admin\appointments_page.dart:805:23 - Undefined name 'textSecondary'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\admin\change_password_page.dart:82:86 - Invalid constant value. - invalid_constant
+  error - lib\admin\change_password_page.dart:88:43 - Methods can't be invoked in constant expressions. - const_eval_method_invocation
+  error - lib\admin\change_password_page.dart:282:86 - Invalid constant value. - invalid_constant
+  error - lib\admin\change_password_page.dart:366:24 - Undefined name 'cardColor'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\admin\change_password_page.dart:461:84 - Invalid constant value. - invalid_constant
+  error - lib\admin\skin_scanner.dart:751:86 - Invalid constant value. - invalid_constant
+  error - lib\admin\skin_scanner.dart:1125:78 - Invalid constant value. - invalid_constant
+  error - lib\admin\skin_scanner.dart:1228:78 - Invalid constant value. - invalid_constant
+  error - lib\admin\skin_scanner.dart:1246:72 - Undefined name 'cardColor'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\admin\skin_scanner.dart:1406:78 - Invalid constant value. - invalid_constant
+  error - lib\admin\skin_scanner.dart:1760:22 - Invalid constant value. - invalid_constant
+  error - lib\admin\skin_scanner.dart:1774:86 - Invalid constant value. - invalid_constant
+  error - lib\admin\skin_scanner.dart:1840:82 - Methods can't be invoked in constant expressions. - const_eval_method_invocation
+  error - lib\admin\skin_scanner.dart:1966:80 - Invalid constant value. - invalid_constant
+  error - lib\admin\skin_scanner.dart:2000:78 - Undefined name 'cardColor'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\admin\skin_scanner.dart:2128:86 - Methods can't be invoked in constant expressions. - const_eval_method_invocation
+  error - lib\admin\skin_scanner.dart:2188:112 - Invalid constant value. - invalid_constant
+  error - lib\admin\skin_scanner.dart:2208:108 - Invalid constant value. - invalid_constant
+  error - lib\admin\skin_scanner.dart:2232:78 - Invalid constant value. - invalid_constant
+  error - lib\admin\skin_scanner.dart:2339:108 - Invalid constant value. - invalid_constant
+  error - lib\admin\skin_scanner.dart:2356:121 - Methods can't be invoked in constant expressions. - const_eval_method_invocation
+  error - lib\admin\skin_scanner.dart:2370:124 - Methods can't be invoked in constant expressions. - const_eval_method_invocation
+  error - lib\admin\skin_scanner.dart:2463:16 - Invalid constant value. - invalid_constant
+  error - lib\admin\skin_scanner.dart:2484:86 - Invalid constant value. - invalid_constant
+  error - lib\admin\skin_scanner.dart:2626:16 - Invalid constant value. - invalid_constant
+  error - lib\admin\skin_scanner.dart:2647:86 - Invalid constant value. - invalid_constant
+  error - lib\admin\staff_book_appointment.dart:224:82 - Invalid constant value. - invalid_constant
+  error - lib\admin\staff_book_appointment.dart:365:84 - Invalid constant value. - invalid_constant
+  error - lib\admin\staff_book_appointment.dart:403:26 - Undefined name 'bgColor'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\admin\staff_book_appointment.dart:442:21 - The named parameter 'foregroundcolor' isn't defined. Try correcting the name to an existing named parameter's name, or defining a named parameter with the name 'foregroundcolor'. - undefined_named_parameter
+  error - lib\admin\staff_book_appointment.dart:564:35 - Invalid constant value. - invalid_constant
+  error - lib\admin\staff_book_appointment.dart:666:94 - Invalid constant value. - invalid_constant
+  error - lib\admin\staff_book_appointment.dart:738:31 - Undefined name 'textColor'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\admin\staff_register_patient.dart:98:82 - Invalid constant value. - invalid_constant
+  error - lib\admin\staff_register_patient.dart:252:30 - Invalid constant value. - invalid_constant
+  error - lib\admin\staff_register_patient.dart:267:30 - Undefined name 'bgColor'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\admin\staff_register_patient.dart:547:35 - Invalid constant value. - invalid_constant
+  error - lib\admin\staff_register_patient.dart:708:97 - Invalid constant value. - invalid_constant
+  error - lib\admin\view_patients.dart:77:24 - Invalid constant value. - invalid_constant
+  error - lib\admin\view_patients.dart:449:32 - Invalid constant value. - invalid_constant
+  error - lib\admin\view_patients.dart:494:16 - Undefined name 'theme'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\admin\view_patients.dart:513:78 - Undefined name 'theme'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\admin\view_patients.dart:523:24 - Undefined name 'theme'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\admin\view_patients.dart:537:16 - Undefined name 'theme'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\admin\view_patients.dart:541:51 - Undefined name 'isDark'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\admin\view_patients.dart:569:22 - Undefined name 'theme'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\admin\view_patients.dart:575:37 - Undefined name 'theme'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\admin\view_patients.dart:603:16 - Undefined name 'theme'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\admin\view_patients.dart:611:51 - Undefined name 'theme'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\admin\view_patients.dart:619:22 - Undefined name 'theme'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\admin\view_patients.dart:633:18 - Undefined name 'theme'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\admin\view_patients.dart:635:37 - Undefined name 'theme'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\admin\view_patients.dart:657:30 - Undefined name 'theme'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\admin\view_patients.dart:663:59 - Undefined name 'theme'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\admin\view_patients.dart:668:68 - Undefined name 'theme'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\admin\view_patients.dart:728:16 - Undefined name 'theme'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\admin\view_patients.dart:747:78 - Undefined name 'theme'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\admin\view_patients.dart:760:28 - Undefined name 'theme'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\admin\view_patients.dart:765:57 - Undefined name 'theme'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\admin\view_patients.dart:812:60 - Undefined name 'theme'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\admin\view_patients.dart:814:71 - Undefined name 'theme'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\admin\view_patients.dart:834:75 - Undefined name 'theme'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\admin\view_patients.dart:839:86 - Undefined name 'theme'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\admin\view_patients.dart:844:43 - Undefined name 'theme'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\admin\view_patients.dart:905:16 - Undefined name 'theme'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\admin\view_patients.dart:907:35 - Undefined name 'theme'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\admin\view_patients.dart:929:28 - Undefined name 'theme'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\admin\view_patients.dart:935:57 - Undefined name 'theme'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\admin\view_patients.dart:945:55 - Undefined name 'theme'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\admin\view_today_appointments.dart:426:22 - Invalid constant value. - invalid_constant
+  error - lib\admin\view_today_appointments.dart:500:60 - Undefined name 'textColor'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\admin\view_today_appointments.dart:577:18 - Invalid constant value. - invalid_constant
+  error - lib\admin\view_today_appointments.dart:594:82 - Invalid constant value. - invalid_constant
+  error - lib\admin\view_today_appointments.dart:638:18 - Invalid constant value. - invalid_constant
+  error - lib\admin\view_users.dart:105:86 - Invalid constant value. - invalid_constant
+  error - lib\admin\view_users.dart:473:71 - Methods can't be invoked in constant expressions. - const_eval_method_invocation
+  error - lib\admin\view_users.dart:556:18 - Invalid constant value. - invalid_constant
+  error - lib\doctor\doctor_dashboard.dart:406:114 - Invalid constant value. - invalid_constant
+  error - lib\doctor\doctor_dashboard.dart:563:106 - Invalid constant value. - invalid_constant
+  error - lib\doctor\doctor_dashboard.dart:638:110 - Invalid constant value. - invalid_constant
+  error - lib\doctor\doctor_dashboard.dart:660:112 - Invalid constant value. - invalid_constant
+  error - lib\doctor\doctor_dashboard.dart:662:103 - Methods can't be invoked in constant expressions. - const_eval_method_invocation
+  error - lib\doctor\doctor_dashboard.dart:697:23 - Undefined name 'textSecondary'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\doctor\doctor_dashboard.dart:837:106 - Invalid constant value. - invalid_constant
+  error - lib\doctor\doctor_dashboard.dart:901:101 - Invalid constant value. - invalid_constant
+  error - lib\doctor\doctor_dashboard.dart:957:18 - Invalid constant value. - invalid_constant
+  error - lib\doctor\doctor_dashboard.dart:975:116 - Invalid constant value. - invalid_constant
+  error - lib\doctor\doctor_dashboard.dart:1022:18 - Invalid constant value. - invalid_constant
+  error - lib\doctor\doctor_dashboard.dart:1039:109 - Invalid constant value. - invalid_constant
+  error - lib\doctor\doctor_edit_profile.dart:142:35 - Invalid constant value. - invalid_constant
+  error - lib\doctor\doctor_edit_profile.dart:206:90 - Invalid constant value. - invalid_constant
+  error - lib\doctor\doctor_edit_profile.dart:240:90 - Invalid constant value. - invalid_constant
+  error - lib\doctor\doctor_edit_profile.dart:362:22 - Undefined name 'cardColor'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\doctor\doctor_slots_page.dart:397:37 - Undefined name 'cardColor'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\doctor\doctor_slots_page.dart:435:53 - Undefined name 'textPrimary'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\doctor\doctor_slots_page.dart:446:63 - Methods can't be invoked in constant expressions. - const_eval_method_invocation
+  error - lib\doctor\patient_reports.dart:89:28 - Invalid constant value. - invalid_constant
+  error - lib\doctor\patient_reports.dart:472:57 - Methods can't be invoked in constant expressions. - const_eval_method_invocation
+  error - lib\doctor\patient_reports.dart:565:78 - Invalid constant value. - invalid_constant
+  error - lib\doctor\patient_reports.dart:653:78 - Invalid constant value. - invalid_constant
+  error - lib\doctor\patient_reports.dart:799:16 - Undefined name 'theme'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\doctor\patient_reports.dart:818:78 - Undefined name 'theme'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\doctor\patient_reports.dart:828:86 - Undefined name 'theme'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\doctor\patient_reports.dart:832:57 - Undefined name 'theme'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\doctor\patient_reports.dart:860:60 - Undefined name 'theme'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\doctor\patient_reports.dart:862:71 - Undefined name 'theme'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\doctor\patient_reports.dart:890:75 - Undefined name 'theme'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\doctor\patient_reports.dart:895:86 - Undefined name 'theme'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\doctor\patient_reports.dart:936:16 - Undefined name 'theme'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\doctor\patient_reports.dart:958:86 - Undefined name 'theme'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\doctor\patient_reports.dart:1003:53 - Undefined name 'theme'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\doctor\patient_reports.dart:1018:68 - Undefined name 'theme'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\doctor\patient_reports.dart:1020:71 - Undefined name 'theme'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\doctor\patient_reports.dart:1097:20 - Invalid constant value. - invalid_constant
+  error - lib\doctor\patient_reports.dart:1097:20 - Undefined name 'theme'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\doctor\patient_reports.dart:1136:65 - Undefined name 'theme'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\doctor\patient_reports.dart:1156:51 - Undefined name 'theme'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\doctor\patient_reports.dart:1172:51 - Undefined name 'theme'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\doctor\patient_reports.dart:1319:20 - Invalid constant value. - invalid_constant
+  error - lib\doctor\patient_reports.dart:1319:20 - Undefined name 'theme'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\doctor\patient_reports.dart:1353:108 - Undefined name 'theme'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\doctor\patient_reports.dart:1354:77 - Undefined name 'theme'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\doctor\patient_reports.dart:1377:28 - Undefined name 'bgColor'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\doctor\patient_reports.dart:1379:47 - Undefined name 'theme'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\doctor\patient_reports.dart:1396:28 - Undefined name 'bgColor'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\doctor\patient_reports.dart:1398:47 - Undefined name 'theme'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\doctor\patient_reports.dart:1406:128 - Invalid constant value. - invalid_constant
+  error - lib\doctor\patient_reports.dart:1406:128 - Undefined name 'theme'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\doctor\patient_reports.dart:1430:131 - Invalid constant value. - invalid_constant
+  error - lib\doctor\patient_reports.dart:1430:131 - Undefined name 'theme'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\doctor\patient_reports.dart:1434:69 - Undefined name 'theme'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\doctor\patient_reports.dart:1472:98 - Undefined name 'theme'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\doctor\patient_reports.dart:1481:81 - Undefined name 'theme'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\doctor\patient_reports.dart:1492:30 - Undefined name 'bgColor'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\doctor\patient_reports.dart:1495:89 - Undefined name 'theme'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\doctor\patient_reports.dart:1505:30 - Undefined name 'bgColor'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\doctor\patient_reports.dart:1508:86 - Undefined name 'theme'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\doctor\patient_reports.dart:1524:87 - Undefined name 'theme'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\doctor\patient_reports.dart:1547:67 - Undefined name 'theme'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\doctor\patient_reports.dart:1559:85 - Undefined name 'theme'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\doctor\patient_reports.dart:1571:93 - Undefined name 'theme'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\doctor\patient_reports.dart:1585:57 - Undefined name 'theme'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\doctor\patient_reports.dart:1597:91 - Undefined name 'theme'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\doctor\patient_reports.dart:1629:65 - Undefined name 'theme'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\doctor\patient_reports.dart:1631:65 - Undefined name 'theme'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\doctor\patient_reports.dart:1731:84 - Invalid constant value. - invalid_constant
+  error - lib\doctor\patient_reports.dart:1740:94 - Invalid constant value. - invalid_constant
+  error - lib\doctor\patient_reports.dart:1843:47 - Invalid constant value. - invalid_constant
+  error - lib\doctor\patient_reports.dart:2044:26 - Invalid constant value. - invalid_constant
+  error - lib\doctor\patient_reports.dart:2044:26 - Undefined name 'textPrimary'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\doctor\patient_reports.dart:2137:86 - Invalid constant value. - invalid_constant
+  error - lib\doctor\patient_reports.dart:2150:68 - Invalid constant value. - invalid_constant
+  error - lib\doctor\patient_reports.dart:2180:68 - Invalid constant value. - invalid_constant
+  error - lib\patient\patient_appointment.dart:256:82 - Invalid constant value. - invalid_constant
+  error - lib\patient\patient_appointment.dart:275:73 - Methods can't be invoked in constant expressions. - const_eval_method_invocation
+  error - lib\patient\patient_appointment.dart:382:86 - Invalid constant value. - invalid_constant
+  error - lib\patient\patient_appointment.dart:511:86 - Invalid constant value. - invalid_constant
+  error - lib\patient\patient_appointment.dart:558:88 - Undefined name 'textSecondary'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\patient\patient_appointment.dart:564:77 - Undefined name 'textSecondary'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\patient\patient_appointment.dart:588:78 - Invalid constant value. - invalid_constant
+  error - lib\patient\patient_appointment.dart:593:49 - Methods can't be invoked in constant expressions. - const_eval_method_invocation
+  error - lib\patient\patient_appointment.dart:607:75 - Methods can't be invoked in constant expressions. - const_eval_method_invocation
+  error - lib\patient\patient_appointment.dart:672:46 - Undefined name 'cardColor'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\patient\patient_appointment.dart:714:52 - Undefined name 'textPrimary'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\patient\patient_appointment.dart:724:54 - Undefined name 'textSecondary'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\patient\patient_appointment.dart:771:82 - Invalid constant value. - invalid_constant
+  error - lib\patient\patient_appointment.dart:848:50 - Undefined name 'cardColor'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\patient\patient_appointment.dart:870:66 - Undefined name 'textSecondary'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\patient\patient_appointment.dart:882:64 - Undefined name 'textPrimary'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\patient\patient_appointment.dart:889:66 - Undefined name 'textSecondary'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\patient\patient_appointment.dart:922:82 - Invalid constant value. - invalid_constant
+  error - lib\patient\patient_appointment.dart:945:84 - Methods can't be invoked in constant expressions. - const_eval_method_invocation
+  error - lib\patient\patient_appointment.dart:970:72 - Invalid constant value. - invalid_constant
+  error - lib\patient\patient_appointment.dart:976:57 - Methods can't be invoked in constant expressions. - const_eval_method_invocation
+  error - lib\patient\patient_appointment.dart:1008:31 - Undefined name 'cardColor'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\patient\patient_appointment.dart:1033:37 - Undefined name 'textPrimary'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+  error - lib\patient\patient_appointment.dart:1079:78 - Invalid constant value. - invalid_constant
+  error - lib\patient\patient_appointment.dart:1084:49 - Methods can't be invoked in constant expressions. - const_eval_method_invocation
+  error - lib\patient\patient_appointment.dart:1141:86 - Invalid constant value. - invalid_constant
+  error - lib\patient\patient_appointment.dart:1166:99 - Invalid constant value. - invalid_constant
+  error - lib\patient\patient_dashboard.dart:213:18 - Invalid constant value. - invalid_constant
+  error - lib\patient\patient_dashboard.dart:496:18 - Invalid constant value. - invalid_constant
+  error - lib\patient\patient_dashboard.dart:814:18 - Invalid constant value. - invalid_constant
+  error - lib\patient\patient_dashboard.dart:923:18 - Invalid constant value. - invalid_constant
+  error - lib\patient\patient_dashboard.dart:1048:18 - Invalid constant value. - invalid_constant
+  error - lib\patient\patient_medical_history.dart:203:86 - Invalid constant value. - invalid_constant
+  error - lib\patient\patient_medical_history.dart:573:88 - Methods can't be invoked in constant expressions. - const_eval_method_invocation
+  error - lib\patient\patient_medical_history.dart:712:20 - Invalid constant value. - invalid_constant
+  error - lib\patient\patient_medical_history.dart:1184:75 - Methods can't be invoked in constant expressions. - const_eval_method_invocation
+  error - lib\patient\patient_payments.dart:105:37 - Invalid constant value. - invalid_constant
+  error - lib\patient\patient_payments.dart:110:35 - Methods can't be invoked in constant expressions. - const_eval_method_invocation
+  error - lib\patient\patient_payments.dart:324:16 - Invalid constant value. - invalid_constant
+  error - lib\patient\patient_reminders.dart:224:86 - Invalid constant value. - invalid_constant
+  error - lib\patient\patient_reminders.dart:559:82 - Invalid constant value. - invalid_constant
+  error - lib\patient\patient_reminders.dart:565:39 - Methods can't be invoked in constant expressions. - const_eval_method_invocation
+  error - lib\patient\patient_reminders.dart:603:84 - Invalid constant value. - invalid_constant
+  error - lib\patient\view_appointment.dart:324:60 - Undefined name 'textSecondary'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier
+warning - lib\admin\add_doctor.dart:43:8 - The value of the field '_isUploadingImage' isn't used. Try removing the field, or using it. - unused_field
+warning - lib\admin\add_doctor.dart:242:11 - The value of the local variable 'emailSubject' isn't used. Try removing the variable or using it. - unused_local_variable
+warning - lib\admin\add_doctor.dart:243:11 - The value of the local variable 'emailBody' isn't used. Try removing the variable or using it. - unused_local_variable
+warning - lib\admin\add_doctor.dart:693:11 - The value of the local variable 'isDark' isn't used. Try removing the variable or using it. - unused_local_variable
+warning - lib\admin\admin_dashboard.dart:6:8 - Unused import: 'package:dermascan/admin/view_users.dart'. Try removing the import directive. - unused_import
+warning - lib\admin\admin_dashboard.dart:9:8 - Unused import: 'package:dermascan/admin/skin_scanner.dart'. Try removing the import directive. - unused_import
+warning - lib\admin\admin_dashboard.dart:39:7 - The value of the field '_totalPatients' isn't used. Try removing the field, or using it. - unused_field
+warning - lib\admin\appointments_page.dart:122:16 - The declaration '_updateStatus' isn't referenced. Try removing the declaration of '_updateStatus'. - unused_element
+warning - lib\admin\appointments_page.dart:262:11 - The value of the local variable 'isDark' isn't used. Try removing the variable or using it. - unused_local_variable
+warning - lib\admin\appointments_page.dart:782:14 - The value of the local variable 'statusIcon' isn't used. Try removing the variable or using it. - unused_local_variable
+warning - lib\admin\change_password_page.dart:162:11 - The value of the local variable 'isDark' isn't used. Try removing the variable or using it. - unused_local_variable
+warning - lib\admin\skin_scanner.dart:47:22 - The value of the field 'pinkAccent' isn't used. Try removing the field, or using it. - unused_field
+warning - lib\admin\skin_scanner.dart:710:11 - The value of the local variable 'isDark' isn't used. Try removing the variable or using it. - unused_local_variable
+warning - lib\admin\skin_scanner.dart:2451:22 - The value of the field 'textPrimary' isn't used. Try removing the field, or using it. - unused_field
+warning - lib\admin\skin_scanner.dart:2459:11 - The value of the local variable 'isDark' isn't used. Try removing the variable or using it. - unused_local_variable
+warning - lib\admin\skin_scanner.dart:2614:22 - The value of the field 'textPrimary' isn't used. Try removing the field, or using it. - unused_field
+warning - lib\admin\skin_scanner.dart:2622:11 - The value of the local variable 'isDark' isn't used. Try removing the variable or using it. - unused_local_variable
+warning - lib\admin\staff_book_appointment.dart:137:24 - Unnecessary cast. Try removing the cast. - unnecessary_cast
+warning - lib\admin\staff_book_appointment.dart:149:24 - Unnecessary cast. Try removing the cast. - unnecessary_cast
+warning - lib\admin\staff_book_appointment.dart:551:11 - The value of the local variable 'isDark' isn't used. Try removing the variable or using it. - unused_local_variable
+warning - lib\admin\staff_register_patient.dart:534:11 - The value of the local variable 'isDark' isn't used. Try removing the variable or using it. - unused_local_variable
+warning - lib\admin\view_patients.dart:29:11 - The value of the local variable 'isDark' isn't used. Try removing the variable or using it. - unused_local_variable
+warning - lib\admin\view_patients.dart:219:11 - The value of the local variable 'phone' isn't used. Try removing the variable or using it. - unused_local_variable
+warning - lib\admin\view_patients.dart:412:11 - The value of the local variable 'isDark' isn't used. Try removing the variable or using it. - unused_local_variable
+warning - lib\admin\view_patients.dart:710:11 - The value of the local variable 'isDark' isn't used. Try removing the variable or using it. - unused_local_variable
+warning - lib\admin\view_today_appointments.dart:38:11 - The value of the local variable 'isDark' isn't used. Try removing the variable or using it. - unused_local_variable
+warning - lib\admin\view_today_appointments.dart:397:25 - Unnecessary cast. Try removing the cast. - unnecessary_cast
+warning - lib\admin\view_today_appointments.dart:445:11 - The value of the local variable 'token' isn't used. Try removing the variable or using it. - unused_local_variable
+warning - lib\admin\view_today_appointments.dart:550:10 - The declaration '_buildStatusBadge' isn't referenced. Try removing the declaration of '_buildStatusBadge'. - unused_element
+warning - lib\admin\view_users.dart:18:22 - The value of the field 'primaryDark' isn't used. Try removing the field, or using it. - unused_field
+warning - lib\admin\view_users.dart:24:22 - The value of the field 'pinkAccent' isn't used. Try removing the field, or using it. - unused_field
+warning - lib\admin\view_users.dart:46:11 - The value of the local variable 'isDark' isn't used. Try removing the variable or using it. - unused_local_variable
+warning - lib\auth_wrapper.dart:2:8 - Unused import: 'package:firebase_auth/firebase_auth.dart'. Try removing the import directive. - unused_import
+warning - lib\doctor\doctor_dashboard.dart:28:22 - The value of the field 'pinkAccent' isn't used. Try removing the field, or using it. - unused_field
+warning - lib\doctor\doctor_dashboard.dart:37:7 - The value of the field '_totalPatients' isn't used. Try removing the field, or using it. - unused_field
+warning - lib\doctor\doctor_dashboard.dart:97:22 - Unnecessary cast. Try removing the cast. - unnecessary_cast
+warning - lib\doctor\doctor_dashboard.dart:104:22 - Unnecessary cast. Try removing the cast. - unnecessary_cast
+warning - lib\doctor\doctor_dashboard.dart:137:22 - Unnecessary cast. Try removing the cast. - unnecessary_cast
+warning - lib\doctor\doctor_dashboard.dart:213:11 - The value of the local variable 'isDark' isn't used. Try removing the variable or using it. - unused_local_variable
+warning - lib\doctor\doctor_dashboard.dart:418:11 - The value of the local variable 'status' isn't used. Try removing the variable or using it. - unused_local_variable
+warning - lib\doctor\doctor_edit_profile.dart:130:11 - The value of the local variable 'isDark' isn't used. Try removing the variable or using it. - unused_local_variable
+warning - lib\doctor\doctor_slots_page.dart:224:11 - The value of the local variable 'isDark' isn't used. Try removing the variable or using it. - unused_local_variable
+warning - lib\doctor\patient_reports.dart:19:22 - The value of the field 'purpleAccent' isn't used. Try removing the field, or using it. - unused_field
+warning - lib\doctor\patient_reports.dart:20:22 - The value of the field 'blueAccent' isn't used. Try removing the field, or using it. - unused_field
+warning - lib\doctor\patient_reports.dart:21:22 - The value of the field 'orangeAccent' isn't used. Try removing the field, or using it. - unused_field
+warning - lib\doctor\patient_reports.dart:22:22 - The value of the field 'greenAccent' isn't used. Try removing the field, or using it. - unused_field
+warning - lib\doctor\patient_reports.dart:23:22 - The value of the field 'pinkAccent' isn't used. Try removing the field, or using it. - unused_field
+warning - lib\doctor\patient_reports.dart:38:11 - The value of the local variable 'isDark' isn't used. Try removing the variable or using it. - unused_local_variable
+warning - lib\doctor\patient_reports.dart:400:11 - The value of the local variable 'isDark' isn't used. Try removing the variable or using it. - unused_local_variable
+warning - lib\doctor\patient_reports.dart:488:16 - The value of the local variable 'gender' isn't used. Try removing the variable or using it. - unused_local_variable
+warning - lib\doctor\patient_reports.dart:781:11 - The value of the local variable 'isDark' isn't used. Try removing the variable or using it. - unused_local_variable
+warning - lib\doctor\patient_reports.dart:1699:11 - The value of the local variable 'isDark' isn't used. Try removing the variable or using it. - unused_local_variable
+warning - lib\doctor\patient_reports.dart:2106:11 - The value of the local variable 'isDark' isn't used. Try removing the variable or using it. - unused_local_variable
+warning - lib\doctor\view_feedbacks_page.dart:790:37 - Dead code. Try removing the code, or fixing the code before it so that it can be reached. - dead_code
+warning - lib\patient\patient_appointment.dart:21:22 - The value of the field 'purpleAccent' isn't used. Try removing the field, or using it. - unused_field
+warning - lib\patient\patient_appointment.dart:22:22 - The value of the field 'blueAccent' isn't used. Try removing the field, or using it. - unused_field
+warning - lib\patient\patient_appointment.dart:25:22 - The value of the field 'pinkAccent' isn't used. Try removing the field, or using it. - unused_field
+warning - lib\patient\patient_appointment.dart:441:11 - The value of the local variable 'isDark' isn't used. Try removing the variable or using it. - unused_local_variable
+warning - lib\patient\patient_dashboard.dart:8:8 - Unused import: 'package:dermascan/patient/patient_payments.dart'. Try removing the import directive. - unused_import
+warning - lib\patient\patient_dashboard.dart:37:25 - The value of the field '_nextAppointment' isn't used. Try removing the field, or using it. - unused_field
+warning - lib\patient\patient_dashboard.dart:310:12 - The value of the local variable 'dateStr' isn't used. Try removing the variable or using it. - unused_local_variable
+warning - lib\patient\patient_dashboard.dart:594:11 - The value of the local variable 'isDark' isn't used. Try removing the variable or using it. - unused_local_variable
+warning - lib\patient\patient_medical_history.dart:19:22 - The value of the field 'primaryDark' isn't used. Try removing the field, or using it. - unused_field
+warning - lib\patient\patient_medical_history.dart:67:32 - The value of the local variable 'allReports' isn't used. Try removing the variable or using it. - unused_local_variable
+warning - lib\patient\patient_medical_history.dart:144:11 - The value of the local variable 'isDark' isn't used. Try removing the variable or using it. - unused_local_variable
+warning - lib\patient\patient_medical_history.dart:1241:10 - The declaration '_buildReportStat' isn't referenced. Try removing the declaration of '_buildReportStat'. - unused_element
+warning - lib\patient\patient_payments.dart:18:22 - The value of the field 'primaryDark' isn't used. Try removing the field, or using it. - unused_field
+warning - lib\patient\patient_payments.dart:22:22 - The value of the field 'blueAccent' isn't used. Try removing the field, or using it. - unused_field
+warning - lib\patient\patient_payments.dart:90:11 - The value of the local variable 'isDark' isn't used. Try removing the variable or using it. - unused_local_variable
+warning - lib\patient\patient_payments.dart:320:11 - The value of the local variable 'isDark' isn't used. Try removing the variable or using it. - unused_local_variable
+warning - lib\patient\patient_register.dart:1:8 - Unused import: 'package:dermascan/login.dart'. Try removing the import directive. - unused_import
+warning - lib\patient\patient_reminders.dart:173:11 - The value of the local variable 'isDark' isn't used. Try removing the variable or using it. - unused_local_variable
+warning - lib\patient\view_appointment.dart:159:11 - The value of the local variable 'isDark' isn't used. Try removing the variable or using it. - unused_local_variable
+   info - integration_test\app_test.dart:8:62 - Angle brackets will be interpreted as HTML. Try using backticks around the content with angle brackets, or try replacing `<` with `&lt;` and `>` with `&gt;`. - unintended_html_in_doc_comment
+   info - lib\about_us.dart:41:35 - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use
+   info - lib\about_us.dart:98:53 - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use
+   info - lib\about_us.dart:177:72 - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use
+   info - lib\admin\add_doctor.dart:91:28 - Don't use 'BuildContext's across async gaps. Try rewriting the code to not use the 'BuildContext', or guard the use with a 'mounted' check. - use_build_context_synchronously
+   info - lib\admin\add_doctor.dart:217:28 - Don't use 'BuildContext's across async gaps. Try rewriting the code to not use the 'BuildContext', or guard the use with a 'mounted' check. - use_build_context_synchronously
+   info - lib\admin\add_doctor.dart:221:28 - Don't use 'BuildContext's across async gaps. Try rewriting the code to not use the 'BuildContext', or guard the use with a 'mounted' check. - use_build_context_synchronously
+   info - lib\admin\add_doctor.dart:473:30 - Don't use 'BuildContext's across async gaps. Try rewriting the code to not use the 'BuildContext', or guard the use with a 'mounted' check. - use_build_context_synchronously
+   info - lib\admin\add_doctor.dart:586:32 - Don't use 'BuildContext's across async gaps. Try rewriting the code to not use the 'BuildContext', or guard the use with a 'mounted' check. - use_build_context_synchronously
+   info - lib\admin\add_doctor.dart:600:32 - Don't use 'BuildContext's across async gaps. Try rewriting the code to not use the 'BuildContext', or guard the use with a 'mounted' check. - use_build_context_synchronously
+   info - lib\admin\add_doctor.dart:628:30 - Don't use 'BuildContext's across async gaps. Try rewriting the code to not use the 'BuildContext', or guard the use with a 'mounted' check. - use_build_context_synchronously
+   info - lib\admin\add_doctor.dart:826:19 - 'value' is deprecated and shouldn't be used. Use initialValue instead. This will set the initial value for the form field. This feature was deprecated after v3.33.0-1.0.pre. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use
+   info - lib\admin\appointments_page.dart:129:28 - Don't use 'BuildContext's across async gaps. Try rewriting the code to not use the 'BuildContext', or guard the use with a 'mounted' check. - use_build_context_synchronously
+   info - lib\admin\appointments_page.dart:146:28 - Don't use 'BuildContext's across async gaps. Try rewriting the code to not use the 'BuildContext', or guard the use with a 'mounted' check. - use_build_context_synchronously
+   info - lib\admin\appointments_page.dart:168:34 - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use
+   info - lib\admin\appointments_page.dart:218:38 - Don't use 'BuildContext's across async gaps. Try rewriting the code to not use the 'BuildContext', or guard the use with a 'mounted' check. - use_build_context_synchronously
+   info - lib\admin\appointments_page.dart:235:38 - Don't use 'BuildContext's across async gaps. Try rewriting the code to not use the 'BuildContext', or guard the use with a 'mounted' check. - use_build_context_synchronously
+   info - lib\admin\appointments_page.dart:344:47 - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use
+   info - lib\admin\appointments_page.dart:351:33 - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use
+   info - lib\admin\appointments_page.dart:363:35 - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use
+   info - lib\admin\appointments_page.dart:488:37 - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use
+   info - lib\admin\appointments_page.dart:596:60 - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use
+   info - lib\admin\appointments_page.dart:648:33 - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use
+   info - lib\admin\appointments_page.dart:648:63 - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use
+   info - lib\admin\change_password_page.dart:125:28 - Don't use 'BuildContext's across async gaps. Try rewriting the code to not use the 'BuildContext', or guard the use with a 'mounted' check. - use_build_context_synchronously
+   info - lib\admin\change_password_page.dart:140:28 - Don't use 'BuildContext's across async gaps. Try rewriting the code to not use the 'BuildContext', or guard the use with a 'mounted' check. - use_build_context_synchronously
+   info - lib\admin\settings_page.dart:230:50 - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check. Guard a 'State.context' use with a 'mounted' check on the State, and other BuildContext use with a 'mounted' check on the BuildContext. - use_build_context_synchronously
+   info - lib\admin\settings_page.dart:1081:42 - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check. Guard a 'State.context' use with a 'mounted' check on the State, and other BuildContext use with a 'mounted' check on the BuildContext. - use_build_context_synchronously
+   info - lib\admin\skin_scanner.dart:12:8 - The imported package 'path' isn't a dependency of the importing package. Try adding a dependency for 'path' in the 'pubspec.yaml' file. - depend_on_referenced_packages
+   info - lib\admin\skin_scanner.dart:127:30 - Statements in an if should be enclosed in a block. Try wrapping the statement in a block. - curly_braces_in_flow_control_structures
+   info - lib\admin\skin_scanner.dart:128:36 - Statements in an if should be enclosed in a block. Try wrapping the statement in a block. - curly_braces_in_flow_control_structures
+   info - lib\admin\skin_scanner.dart:676:28 - Don't use 'BuildContext's across async gaps. Try rewriting the code to not use the 'BuildContext', or guard the use with a 'mounted' check. - use_build_context_synchronously
+   info - lib\admin\staff_book_appointment.dart:216:36 - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use
+   info - lib\admin\staff_book_appointment.dart:478:30 - Don't use 'BuildContext's across async gaps. Try rewriting the code to not use the 'BuildContext', or guard the use with a 'mounted' check. - use_build_context_synchronously
+   info - lib\admin\staff_book_appointment.dart:487:30 - Don't use 'BuildContext's across async gaps. Try rewriting the code to not use the 'BuildContext', or guard the use with a 'mounted' check. - use_build_context_synchronously
+   info - lib\admin\staff_book_appointment.dart:496:28 - Don't use 'BuildContext's across async gaps. Try rewriting the code to not use the 'BuildContext', or guard the use with a 'mounted' check. - use_build_context_synchronously
+   info - lib\admin\staff_register_patient.dart:67:13 - Unnecessary braces in a string interpolation. Try removing the braces. - unnecessary_brace_in_string_interps
+   info - lib\admin\staff_register_patient.dart:90:36 - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use
+   info - lib\admin\staff_register_patient.dart:389:30 - Don't use 'BuildContext's across async gaps. Try rewriting the code to not use the 'BuildContext', or guard the use with a 'mounted' check. - use_build_context_synchronously
+   info - lib\admin\staff_register_patient.dart:440:30 - Don't use 'BuildContext's across async gaps. Try rewriting the code to not use the 'BuildContext', or guard the use with a 'mounted' check. - use_build_context_synchronously
+   info - lib\admin\staff_register_patient.dart:454:30 - Don't use 'BuildContext's across async gaps. Try rewriting the code to not use the 'BuildContext', or guard the use with a 'mounted' check. - use_build_context_synchronously
+   info - lib\admin\staff_register_patient.dart:470:28 - Don't use 'BuildContext's across async gaps. Try rewriting the code to not use the 'BuildContext', or guard the use with a 'mounted' check. - use_build_context_synchronously
+   info - lib\admin\view_doctors.dart:124:47 - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use
+   info - lib\admin\view_doctors.dart:139:40 - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use
+   info - lib\admin\view_doctors.dart:167:53 - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use
+   info - lib\admin\view_doctors.dart:229:58 - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use
+   info - lib\admin\view_doctors.dart:261:28 - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use
+   info - lib\admin\view_doctors.dart:283:61 - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use
+   info - lib\admin\view_doctors.dart:369:36 - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use
+   info - lib\admin\view_revenue.dart:136:7 - Don't invoke 'print' in production code. Try using a logging framework. - avoid_print
+   info - lib\admin\view_revenue.dart:175:61 - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use
+   info - lib\admin\view_revenue.dart:182:48 - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use
+   info - lib\admin\view_revenue.dart:306:61 - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use
+   info - lib\admin\view_revenue.dart:331:34 - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use
+   info - lib\admin\view_today_appointments.dart:709:38 - Don't use 'BuildContext's across async gaps. Try rewriting the code to not use the 'BuildContext', or guard the use with a 'mounted' check. - use_build_context_synchronously
+   info - lib\admin\view_users.dart:128:33 - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use
+   info - lib\admin\view_users.dart:335:35 - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use
+   info - lib\admin\view_users.dart:353:44 - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use
+   info - lib\admin\view_users.dart:353:72 - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use
+   info - lib\admin\view_users.dart:382:50 - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use
+   info - lib\admin\view_users.dart:458:53 - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use
+   info - lib\admin\view_users.dart:486:53 - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use
+   info - lib\admin\view_users.dart:583:46 - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use
+   info - lib\admin\view_users.dart:583:74 - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use
+   info - lib\admin\view_users.dart:607:42 - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use
+   info - lib\admin\view_users.dart:712:28 - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use
+   info - lib\admin\view_users.dart:746:35 - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use
+   info - lib\admin\view_users.dart:769:35 - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use
+   info - lib\admin\view_users.dart:771:54 - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use
+   info - lib\auth_wrapper.dart:56:7 - Don't invoke 'print' in production code. Try using a logging framework. - avoid_print
+   info - lib\doctor\doctor_dashboard.dart:159:28 - Don't use 'BuildContext's across async gaps. Try rewriting the code to not use the 'BuildContext', or guard the use with a 'mounted' check. - use_build_context_synchronously
+   info - lib\doctor\doctor_dashboard.dart:169:28 - Don't use 'BuildContext's across async gaps. Try rewriting the code to not use the 'BuildContext', or guard the use with a 'mounted' check. - use_build_context_synchronously
+   info - lib\doctor\doctor_dashboard.dart:470:24 - Unnecessary 'const' keyword. Try removing the keyword. - unnecessary_const
+   info - lib\doctor\doctor_dashboard.dart:1006:17 - 'activeColor' is deprecated and shouldn't be used. Use activeThumbColor instead. This feature was deprecated after v3.31.0-2.0.pre. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use
+   info - lib\doctor\doctor_dashboard.dart:1066:35 - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use
+   info - lib\doctor\doctor_edit_profile.dart:182:51 - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use
+   info - lib\doctor\doctor_edit_profile.dart:287:53 - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use
+   info - lib\doctor\doctor_slots_page.dart:461:19 - 'activeColor' is deprecated and shouldn't be used. Use activeThumbColor instead. This feature was deprecated after v3.31.0-2.0.pre. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use
+   info - lib\doctor\patient_reports.dart:1264:28 - Don't use 'BuildContext's across async gaps. Try rewriting the code to not use the 'BuildContext', or guard the use with a 'mounted' check. - use_build_context_synchronously
+   info - lib\doctor\patient_reports.dart:1278:28 - Don't use 'BuildContext's across async gaps. Try rewriting the code to not use the 'BuildContext', or guard the use with a 'mounted' check. - use_build_context_synchronously
+   info - lib\doctor\patient_reports.dart:1938:28 - Don't use 'BuildContext's across async gaps. Try rewriting the code to not use the 'BuildContext', or guard the use with a 'mounted' check. - use_build_context_synchronously
+   info - lib\doctor\patient_reports.dart:2085:17 - Unnecessary 'const' keyword. Try removing the keyword. - unnecessary_const
+   info - lib\doctor\patient_reports.dart:2095:28 - Don't use 'BuildContext's across async gaps. Try rewriting the code to not use the 'BuildContext', or guard the use with a 'mounted' check. - use_build_context_synchronously
+   info - lib\doctor\view_feedbacks_page.dart:806:57 - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check. Guard a 'State.context' use with a 'mounted' check on the State, and other BuildContext use with a 'mounted' check on the BuildContext. - use_build_context_synchronously
+   info - lib\doctor\view_feedbacks_page.dart:807:64 - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check. Guard a 'State.context' use with a 'mounted' check on the State, and other BuildContext use with a 'mounted' check on the BuildContext. - use_build_context_synchronously
+   info - lib\doctor\view_feedbacks_page.dart:825:64 - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check. Guard a 'State.context' use with a 'mounted' check on the State, and other BuildContext use with a 'mounted' check on the BuildContext. - use_build_context_synchronously
+   info - lib\landing_page.dart:41:34 - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use
+   info - lib\landing_page.dart:42:34 - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use
+   info - lib\landing_page.dart:69:58 - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use
+   info - lib\landing_page.dart:91:48 - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use
+   info - lib\login.dart:199:60 - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use
+   info - lib\patient\feedback_page.dart:364:27 - Unnecessary 'const' keyword. Try removing the keyword. - unnecessary_const
+   info - lib\patient\patient_appointment.dart:426:28 - Don't use 'BuildContext's across async gaps. Try rewriting the code to not use the 'BuildContext', or guard the use with a 'mounted' check. - use_build_context_synchronously
+   info - lib\patient\patient_dashboard.dart:429:23 - Don't use 'BuildContext's across async gaps. Try rewriting the code to not use the 'BuildContext', or guard the use with a 'mounted' check. - use_build_context_synchronously
+   info - lib\patient\patient_dashboard.dart:430:30 - Don't use 'BuildContext's across async gaps. Try rewriting the code to not use the 'BuildContext', or guard the use with a 'mounted' check. - use_build_context_synchronously
+   info - lib\patient\patient_dashboard.dart:446:28 - Don't use 'BuildContext's across async gaps. Try rewriting the code to not use the 'BuildContext', or guard the use with a 'mounted' check. - use_build_context_synchronously
+   info - lib\patient\patient_dashboard.dart:465:23 - Don't use 'BuildContext's across async gaps. Try rewriting the code to not use the 'BuildContext', or guard the use with a 'mounted' check. - use_build_context_synchronously
+   info - lib\patient\patient_dashboard.dart:466:30 - Don't use 'BuildContext's across async gaps. Try rewriting the code to not use the 'BuildContext', or guard the use with a 'mounted' check. - use_build_context_synchronously
+   info - lib\patient\patient_dashboard.dart:482:28 - Don't use 'BuildContext's across async gaps. Try rewriting the code to not use the 'BuildContext', or guard the use with a 'mounted' check. - use_build_context_synchronously
+   info - lib\patient\patient_dashboard.dart:734:51 - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use
+   info - lib\patient\patient_dashboard.dart:826:40 - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use
+   info - lib\patient\patient_dashboard.dart:877:43 - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use
+   info - lib\patient\patient_dashboard.dart:880:45 - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use
+   info - lib\patient\patient_dashboard.dart:946:40 - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use
+   info - lib\patient\patient_dashboard.dart:1015:28 - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use
+   info - lib\patient\patient_dashboard.dart:1071:40 - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use
+   info - lib\patient\patient_dashboard.dart:1178:32 - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use
+   info - lib\patient\patient_dashboard.dart:1199:38 - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use
+   info - lib\patient\patient_dashboard.dart:1226:76 - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use
+   info - lib\patient\patient_medical_history.dart:97:43 - The private field _rawResults could be 'final'. Try making the field 'final'. - prefer_final_fields
+   info - lib\patient\patient_medical_history.dart:406:41 - Unnecessary use of multiple underscores. Try using '_'. - unnecessary_underscores
+   info - lib\patient\patient_medical_history.dart:406:45 - Unnecessary use of multiple underscores. Try using '_'. - unnecessary_underscores
+   info - lib\patient\patient_medical_history.dart:741:47 - Unnecessary use of multiple underscores. Try using '_'. - unnecessary_underscores
+   info - lib\patient\patient_medical_history.dart:741:51 - Unnecessary use of multiple underscores. Try using '_'. - unnecessary_underscores
+   info - lib\patient\patient_medical_history.dart:1383:49 - Unnecessary use of multiple underscores. Try using '_'. - unnecessary_underscores
+   info - lib\patient\patient_medical_history.dart:1383:53 - Unnecessary use of multiple underscores. Try using '_'. - unnecessary_underscores
+   info - lib\patient\patient_payments.dart:139:65 - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use
+   info - lib\patient\patient_payments.dart:193:67 - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use
+   info - lib\patient\patient_payments.dart:247:40 - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use
+   info - lib\patient\patient_payments.dart:349:46 - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use
+   info - lib\patient\patient_payments.dart:351:65 - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use
+   info - lib\patient\patient_payments.dart:401:55 - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use
+   info - lib\patient\patient_register.dart:58:11 - 'dialogBackgroundColor' is deprecated and shouldn't be used. Use DialogThemeData.backgroundColor instead. This feature was deprecated after v3.27.0-0.1.pre. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use
+   info - lib\patient\patient_register.dart:249:17 - 'value' is deprecated and shouldn't be used. Use initialValue instead. This will set the initial value for the form field. This feature was deprecated after v3.33.0-1.0.pre. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use
+   info - lib\patient\patient_register.dart:277:115 - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use
+   info - lib\selection.dart:1:8 - The import of 'dart:ui' is unnecessary because all of the used elements are also provided by the import of 'package:flutter/material.dart'. Try removing the import directive. - unnecessary_import
+   info - lib\selection.dart:9:8 - The import of 'package:flutter/services.dart' is unnecessary because all of the used elements are also provided by the import of 'package:flutter/material.dart'. Try removing the import directive. - unnecessary_import
+   info - lib\selection.dart:48:13 - Don't use 'BuildContext's across async gaps. Try rewriting the code to not use the 'BuildContext', or guard the use with a 'mounted' check. - use_build_context_synchronously
+   info - lib\selection.dart:53:32 - Don't use 'BuildContext's across async gaps. Try rewriting the code to not use the 'BuildContext', or guard the use with a 'mounted' check. - use_build_context_synchronously
+   info - lib\selection.dart:62:13 - Don't use 'BuildContext's across async gaps. Try rewriting the code to not use the 'BuildContext', or guard the use with a 'mounted' check. - use_build_context_synchronously
+   info - lib\selection.dart:91:33 - Unnecessary use of multiple underscores. Try using '_'. - unnecessary_underscores
+   info - lib\selection.dart:91:37 - Unnecessary use of multiple underscores. Try using '_'. - unnecessary_underscores
+   info - lib\selection.dart:100:41 - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use
+   info - lib\selection.dart:100:72 - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use
+   info - lib\services\firebase_auth_service.dart:132:7 - Don't invoke 'print' in production code. Try using a logging framework. - avoid_print
+   info - lib\services\firebase_auth_service.dart:140:7 - Don't invoke 'print' in production code. Try using a logging framework. - avoid_print
+   info - lib\services\firebase_auth_service.dart:141:7 - Don't invoke 'print' in production code. Try using a logging framework. - avoid_print
+   info - lib\services\firebase_auth_service.dart:148:7 - Don't invoke 'print' in production code. Try using a logging framework. - avoid_print
+   info - lib\services\firebase_auth_service.dart:193:7 - Don't invoke 'print' in production code. Try using a logging framework. - avoid_print
+
+421 issues found.

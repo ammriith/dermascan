@@ -7,6 +7,7 @@ import 'patient/patient_register.dart';
 import 'about_us.dart';
 import 'auth_wrapper.dart';
 import 'providers/theme_provider.dart';
+import 'services/notification_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -15,6 +16,10 @@ void main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+  
+  // Initialize Notification Service
+  await NotificationService().init();
+  NotificationService().listenForNewAppointments();
   
   runApp(
     ChangeNotifierProvider(

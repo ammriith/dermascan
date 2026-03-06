@@ -155,6 +155,40 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
     }
   }
 
+  void _sendReminder(String appointmentId) async {
+    try {
+      await _firestore.collection('appointments').doc(appointmentId).update({
+        'reminderSent': true,
+        'reminderAt': FieldValue.serverTimestamp(),
+      });
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Row(
+              children: [
+                Icon(Icons.check_circle_outline, color: Colors.white, size: 20),
+                SizedBox(width: 8),
+                Text('Reminder sent to patient'),
+              ],
+            ),
+            backgroundColor: greenAccent,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+      }
+      
+      _loadAppointments();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: redAccent),
+        );
+      }
+    }
+  }
+
   void _showCancelDialog(String appointmentId) {
     final reasonController = TextEditingController();
     
@@ -934,6 +968,17 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
               child: Row(
                 children: [
+                  if (widget.isDoctor && (status == 'Booked' || status == 'Waiting')) ...[
+                    Expanded(
+                      child: _buildActionButton(
+                        "Send Reminder",
+                        Icons.notifications_active_rounded,
+                        blueAccent,
+                        () => _sendReminder(appointment['id']),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                  ],
                   Expanded(
                     child: _buildActionButton(
                       "Cancel Appointment",

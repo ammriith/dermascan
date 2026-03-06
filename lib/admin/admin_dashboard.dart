@@ -8,6 +8,7 @@ import 'package:dermascan/admin/settings_page.dart';
 import 'package:dermascan/admin/view_today_appointments.dart';
 import 'package:dermascan/admin/skin_scanner.dart';
 import 'package:dermascan/admin/appointments_page.dart';
+import 'package:dermascan/admin/patient_statistics.dart';
 import 'package:dermascan/doctor/view_feedbacks_page.dart';
 
 
@@ -369,13 +370,15 @@ class _ClinicStaffDashboardState extends State<ClinicStaffDashboard> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(_greeting, style: const TextStyle(fontSize: 14, color: textSecondary, fontWeight: FontWeight.w500)),
-              const SizedBox(height: 4),
-              const Text("Clinic Dashboard", style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: textPrimary)),
-            ],
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(_greeting, style: const TextStyle(fontSize: 14, color: textSecondary, fontWeight: FontWeight.w500)),
+                const SizedBox(height: 4),
+                const Text("Clinic Dashboard", style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: textPrimary), overflow: TextOverflow.ellipsis, maxLines: 1),
+              ],
+            ),
           ),
           _buildIconButton(Icons.notifications_outlined, () {
              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No new notifications'), behavior: SnackBarBehavior.floating));
@@ -535,7 +538,7 @@ class _ClinicStaffDashboardState extends State<ClinicStaffDashboard> {
               const SizedBox(width: 12),
               _buildActionTile("Feedbacks", Icons.rate_review_rounded, purpleAccent, () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ViewFeedbacksPage(isDoctor: false)))),
               const SizedBox(width: 12),
-              Expanded(child: Container()), // Spacer
+              _buildActionTile("Daily Stats", Icons.bar_chart_rounded, primaryColor, () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PatientStatisticsPage()))),
             ],
           ),
         ],

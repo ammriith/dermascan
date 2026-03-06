@@ -22,6 +22,7 @@ class _ViewRevenuePageState extends State<ViewRevenuePage> {
   int _totalAppointments = 0;
   int _completedAppointments = 0;
   List<Map<String, dynamic>> _recentTransactions = [];
+  bool _showAllTransactions = false;
 
   @override
   void initState() {
@@ -59,14 +60,12 @@ class _ViewRevenuePageState extends State<ViewRevenuePage> {
             if (createdAt.isAfter(monthStart)) monthTotal += fee;
 
             // Add to transactions
-            if (transactions.length < 10) {
-              transactions.add({
-                'patientName': data['name'] ?? 'Unknown',
-                'amount': fee,
-                'date': createdAt,
-                'type': 'Registration',
-              });
-            }
+            transactions.add({
+              'patientName': data['name'] ?? 'Unknown',
+              'amount': fee,
+              'date': createdAt,
+              'type': 'Registration',
+            });
           }
         }
       }
@@ -100,14 +99,12 @@ class _ViewRevenuePageState extends State<ViewRevenuePage> {
             if (createdAt.isAfter(monthStart)) monthTotal += fee;
 
             // Add to transactions
-            if (transactions.length < 10) {
-              transactions.add({
-                'patientName': data['patient_name'] ?? 'Unknown',
-                'amount': fee,
-                'date': createdAt,
-                'type': 'Consultation',
-              });
-            }
+            transactions.add({
+              'patientName': data['patient_name'] ?? 'Unknown',
+              'amount': fee,
+              'date': createdAt,
+              'type': 'Consultation',
+            });
           }
         }
       }
@@ -127,7 +124,7 @@ class _ViewRevenuePageState extends State<ViewRevenuePage> {
         _totalRevenue = allTimeTotal;
         _totalAppointments = totalAppts;
         _completedAppointments = completedAppts;
-        _recentTransactions = transactions.take(10).toList();
+        _recentTransactions = transactions;
         _isLoading = false;
       });
     } catch (e) {
@@ -236,9 +233,26 @@ class _ViewRevenuePageState extends State<ViewRevenuePage> {
                     const SizedBox(height: 30),
 
                     // Recent Transactions
-                    Text(
-                      "Recent Transactions",
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textColor),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          "Recent Transactions",
+                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textColor),
+                        ),
+                        if (_recentTransactions.length > 5)
+                          TextButton(
+                            onPressed: () {
+                              setState(() {
+                                _showAllTransactions = !_showAllTransactions;
+                              });
+                            },
+                            child: Text(
+                              _showAllTransactions ? "Show Less" : "See All",
+                              style: TextStyle(color: accentColor, fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                      ],
                     ),
                     const SizedBox(height: 16),
                     if (_recentTransactions.isEmpty)
@@ -258,7 +272,9 @@ class _ViewRevenuePageState extends State<ViewRevenuePage> {
                         ),
                       )
                     else
-                      ..._recentTransactions.map((tx) => _buildTransactionItem(tx)),
+                      ...(_showAllTransactions 
+                          ? _recentTransactions 
+                          : _recentTransactions.take(5)).map((tx) => _buildTransactionItem(tx)),
 
                     const SizedBox(height: 20),
                   ],

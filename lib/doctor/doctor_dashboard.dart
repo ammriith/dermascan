@@ -7,6 +7,7 @@ import 'package:dermascan/doctor/view_feedbacks_page.dart';
 import 'package:dermascan/doctor/doctor_edit_profile.dart';
 import 'package:dermascan/admin/appointments_page.dart';
 import 'package:dermascan/admin/change_password_page.dart';
+import 'package:intl/intl.dart';
 
 class DoctorDashboard extends StatefulWidget {
   const DoctorDashboard({super.key});
@@ -29,6 +30,7 @@ class _DoctorDashboardState extends State<DoctorDashboard> {
   static const Color orangeAccent = Color(0xFFF59E0B);
   static const Color pinkAccent = Color(0xFFEC4899);
   static const Color greenAccent = Color(0xFF10B981);
+  static const Color redAccent = Color(0xFFEF4444);
   
   int _selectedNavIndex = 0;
 
@@ -151,6 +153,201 @@ class _DoctorDashboardState extends State<DoctorDashboard> {
     }
   }
 
+  Future<void> _sendReminder(Map<String, dynamic> appointment) async {
+    final TextEditingController suggestionController = TextEditingController();
+    final TextEditingController medsController = TextEditingController();
+    DateTime? selectedDate;
+    TimeOfDay? selectedTime;
+    bool isSaving = false;
+    
+    final patientId = appointment['patientId'] ?? appointment['patient_id'] ?? '';
+    final patientName = appointment['patientName'] ?? appointment['patient_name'] ?? 'Patient';
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setState) => Container(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+            top: 24,
+            left: 24,
+            right: 24,
+          ),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 20),
+                  decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)),
+                ),
+              ),
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(color: orangeAccent.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)),
+                    child: const Icon(Icons.notification_add_rounded, color: orangeAccent),
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text("Send Care Reminder", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                        Text("Include care suggestions & next visit time", style: TextStyle(fontSize: 12, color: textSecondary)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+              const Text("Care Suggestions", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+              const SizedBox(height: 8),
+              TextField(
+                controller: suggestionController,
+                maxLines: 3,
+                decoration: InputDecoration(
+                  hintText: "Enter care advice or suggestions...",
+                  filled: true,
+                  fillColor: Colors.grey.shade50,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade200)),
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text("Next Consulting Time (Optional)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    flex: 3,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade50,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.grey.shade200),
+                      ),
+                      child: ListTile(
+                        dense: true,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+                        leading: const Icon(Icons.calendar_today_rounded, size: 18, color: primaryColor),
+                        title: Text(
+                          selectedDate == null ? "Select Date" : DateFormat('MMM dd, yyyy').format(selectedDate!),
+                          style: TextStyle(color: selectedDate == null ? Colors.grey.shade600 : textPrimary, fontSize: 13),
+                        ),
+                        onTap: () async {
+                          final picked = await showDatePicker(
+                            context: context,
+                            initialDate: DateTime.now().add(const Duration(days: 7)),
+                            firstDate: DateTime.now(),
+                            lastDate: DateTime.now().add(const Duration(days: 365)),
+                          );
+                          if (picked != null) setState(() => selectedDate = picked);
+                        },
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    flex: 2,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade50,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.grey.shade200),
+                      ),
+                      child: ListTile(
+                        dense: true,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+                        leading: const Icon(Icons.access_time_rounded, size: 18, color: primaryColor),
+                        title: Text(
+                          selectedTime == null ? "Time" : selectedTime!.format(context),
+                          style: TextStyle(color: selectedTime == null ? Colors.grey.shade600 : textPrimary, fontSize: 13),
+                        ),
+                        onTap: () async {
+                          final picked = await showTimePicker(context: context, initialTime: const TimeOfDay(hour: 10, minute: 0));
+                          if (picked != null) setState(() => selectedTime = picked);
+                        },
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: ElevatedButton(
+                  onPressed: isSaving ? null : () async {
+                    setState(() => isSaving = true);
+                    try {
+                      DateTime? combinedDateTime;
+                      if (selectedDate != null) {
+                        final time = selectedTime ?? const TimeOfDay(hour: 10, minute: 0);
+                        combinedDateTime = DateTime(selectedDate!.year, selectedDate!.month, selectedDate!.day, time.hour, time.minute);
+                      }
+
+                      // 1. Update appointment status
+                      await _firestore.collection('appointments').doc(appointment['id']).update({
+                        'reminderSent': true,
+                        'reminderAt': FieldValue.serverTimestamp(),
+                        if (suggestionController.text.isNotEmpty) 'doctorNotes': suggestionController.text.trim(),
+                      });
+
+                      // 2. Add to doctor_suggestions for persistent reminder
+                      if (suggestionController.text.isNotEmpty || selectedDate != null) {
+                        await _firestore.collection('doctor_suggestions').add({
+                          'patientId': patientId,
+                          'patientName': patientName,
+                          'doctorId': _auth.currentUser?.uid,
+                          'doctorName': _doctorName,
+                          'reportTitle': 'General Follow-up',
+                          'suggestion': suggestionController.text.trim(),
+                          'followUpDate': combinedDateTime != null ? Timestamp.fromDate(combinedDateTime) : null,
+                          'followUpTime': selectedTime != null ? selectedTime!.format(context) : null,
+                          'createdAt': FieldValue.serverTimestamp(),
+                        });
+                      }
+
+                      if (context.mounted) {
+                        Navigator.pop(context);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Reminder & Suggestions sent'), backgroundColor: greenAccent, behavior: SnackBarBehavior.floating),
+                        );
+                      }
+                      _loadDoctorData();
+                    } catch (e) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: redAccent));
+                      }
+                    } finally {
+                      setState(() => isSaving = false);
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: orangeAccent,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  child: isSaving ? const CircularProgressIndicator(color: Colors.white) : const Text("Send Reminder", style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _updateAppointmentStatus(String appointmentId, String newStatus) async {
     try {
       await _firestore.collection('appointments').doc(appointmentId).update({
@@ -261,6 +458,7 @@ class _DoctorDashboardState extends State<DoctorDashboard> {
   }
 
   Widget _buildHeader() {
+    final doctorId = _auth.currentUser?.uid ?? '';
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 20, 24, 16),
       child: Row(
@@ -283,11 +481,53 @@ class _DoctorDashboardState extends State<DoctorDashboard> {
           ),
           Row(
             children: [
-              _buildIconButton(Icons.notifications_outlined, () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('No new notifications'), behavior: SnackBarBehavior.floating),
-                );
-              }),
+              // 🔔 Live notification bell with badge
+              StreamBuilder<QuerySnapshot>(
+                stream: _firestore
+                    .collection('doctor_notifications')
+                    .where('doctorId', isEqualTo: doctorId)
+                    .where('isRead', isEqualTo: false)
+                    .snapshots(),
+                builder: (context, snapshot) {
+                  final unreadCount = snapshot.data?.docs.length ?? 0;
+                  return GestureDetector(
+                    onTap: () => _showNotificationsSheet(doctorId),
+                    child: Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: cardColor,
+                            borderRadius: BorderRadius.circular(14),
+                            boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 10, offset: const Offset(0, 2))],
+                          ),
+                          child: const Icon(Icons.notifications_outlined, color: textPrimary, size: 22),
+                        ),
+                        if (unreadCount > 0)
+                          Positioned(
+                            top: -4,
+                            right: -4,
+                            child: Container(
+                              width: 18,
+                              height: 18,
+                              decoration: const BoxDecoration(
+                                color: Colors.red,
+                                shape: BoxShape.circle,
+                              ),
+                              child: Center(
+                                child: Text(
+                                  unreadCount > 9 ? '9+' : '$unreadCount',
+                                  style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  );
+                },
+              ),
               const SizedBox(width: 10),
               GestureDetector(
                 onTap: () => setState(() => _selectedNavIndex = 3),
@@ -322,6 +562,241 @@ class _DoctorDashboardState extends State<DoctorDashboard> {
         ],
       ),
     );
+  }
+
+  void _showNotificationsSheet(String doctorId) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => DraggableScrollableSheet(
+        initialChildSize: 0.7,
+        maxChildSize: 0.92,
+        minChildSize: 0.4,
+        builder: (_, scrollController) => Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          child: Column(
+            children: [
+              // Handle
+              Container(
+                margin: const EdgeInsets.only(top: 12, bottom: 0),
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)),
+              ),
+              // Header
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: greenAccent.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(Icons.biotech_rounded, color: greenAccent),
+                    ),
+                    const SizedBox(width: 14),
+                    const Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text("AI Scan Notifications", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textPrimary)),
+                        Text("Patient scan results sent to you", style: TextStyle(fontSize: 12, color: textSecondary)),
+                      ],
+                    ),
+                    const Spacer(),
+                    TextButton(
+                      onPressed: () => _markAllNotificationsRead(doctorId),
+                      child: const Text("Mark all read", style: TextStyle(color: primaryColor, fontSize: 12)),
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(height: 1),
+              // Notification list
+              Expanded(
+                child: StreamBuilder<QuerySnapshot>(
+                  stream: _firestore
+                      .collection('doctor_notifications')
+                      .where('doctorId', isEqualTo: doctorId)
+                      .snapshots(),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(child: CircularProgressIndicator(color: primaryColor));
+                    }
+
+                    final docs = snapshot.data?.docs ?? [];
+                    // Sort by newest first
+                    final sorted = docs.toList()
+                      ..sort((a, b) {
+                        final aTime = (a.data() as Map<String, dynamic>)['createdAt'] as Timestamp?;
+                        final bTime = (b.data() as Map<String, dynamic>)['createdAt'] as Timestamp?;
+                        if (aTime == null || bTime == null) return 0;
+                        return bTime.compareTo(aTime);
+                      });
+
+                    if (sorted.isEmpty) {
+                      return Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.notifications_none_rounded, size: 60, color: Colors.grey.shade300),
+                            const SizedBox(height: 12),
+                            Text("No notifications yet", style: TextStyle(color: Colors.grey.shade500, fontSize: 16)),
+                          ],
+                        ),
+                      );
+                    }
+
+                    return ListView.builder(
+                      controller: scrollController,
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                      itemCount: sorted.length,
+                      itemBuilder: (context, index) {
+                        final doc = sorted[index];
+                        final data = doc.data() as Map<String, dynamic>;
+                        final isRead = data['isRead'] == true;
+                        final createdAt = data['createdAt'] as Timestamp?;
+                        final severity = data['severity'] ?? 'N/A';
+                        final confidence = ((data['confidence'] ?? 0) as num) * 100;
+
+                        Color severityColor;
+                        final sevLower = severity.toString().toLowerCase();
+                        if (sevLower.contains('severe') || sevLower.contains('high')) {
+                          severityColor = Colors.red;
+                        } else if (sevLower.contains('moderate')) {
+                          severityColor = Colors.orange;
+                        } else {
+                          severityColor = greenAccent;
+                        }
+
+                        return GestureDetector(
+                          onTap: () async {
+                            // Mark as read
+                            await doc.reference.update({'isRead': true});
+                          },
+                          child: Container(
+                            margin: const EdgeInsets.only(bottom: 12),
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: isRead ? Colors.white : greenAccent.withValues(alpha: 0.05),
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(
+                                color: isRead ? Colors.grey.shade200 : greenAccent.withValues(alpha: 0.3),
+                              ),
+                            ),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(10),
+                                  decoration: BoxDecoration(
+                                    color: greenAccent.withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: const Icon(Icons.biotech_rounded, color: greenAccent, size: 20),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            child: Text(
+                                              data['patientName'] ?? 'Patient',
+                                              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: textPrimary),
+                                            ),
+                                          ),
+                                          if (!isRead)
+                                            Container(
+                                              width: 8,
+                                              height: 8,
+                                              decoration: const BoxDecoration(color: greenAccent, shape: BoxShape.circle),
+                                            ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        "Condition: ${data['prediction'] ?? 'Unknown'}",
+                                        style: const TextStyle(fontSize: 14, color: textPrimary, fontWeight: FontWeight.w500),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Row(
+                                        children: [
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                            decoration: BoxDecoration(
+                                              color: severityColor.withValues(alpha: 0.1),
+                                              borderRadius: BorderRadius.circular(6),
+                                            ),
+                                            child: Text(
+                                              severity,
+                                              style: TextStyle(fontSize: 11, color: severityColor, fontWeight: FontWeight.bold),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Text(
+                                            "${confidence.toStringAsFixed(0)}% confidence",
+                                            style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                                          ),
+                                        ],
+                                      ),
+                                      if (createdAt != null) ...[
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          _formatDate(createdAt.toDate()),
+                                          style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _formatDate(DateTime dt) {
+    final now = DateTime.now();
+    final diff = now.difference(dt);
+    if (diff.inMinutes < 1) return 'Just now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    return '${dt.day}/${dt.month}/${dt.year}';
+  }
+
+  Future<void> _markAllNotificationsRead(String doctorId) async {
+    try {
+      final snap = await _firestore
+          .collection('doctor_notifications')
+          .where('doctorId', isEqualTo: doctorId)
+          .where('isRead', isEqualTo: false)
+          .get();
+      final batch = _firestore.batch();
+      for (final doc in snap.docs) {
+        batch.update(doc.reference, {'isRead': true});
+      }
+      await batch.commit();
+    } catch (e) {
+      debugPrint('Error marking notifications read: $e');
+    }
   }
 
   Widget _buildIconButton(IconData icon, VoidCallback onTap) {
@@ -759,10 +1234,27 @@ class _DoctorDashboardState extends State<DoctorDashboard> {
             PopupMenuButton<String>(
               icon: const Icon(Icons.more_vert_rounded, color: textSecondary),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              onSelected: (value) => _updateAppointmentStatus(appointment['id'], value),
+              onSelected: (value) {
+                if (value == 'reminder') {
+                  _sendReminder(appointment);
+                } else {
+                  _updateAppointmentStatus(appointment['id'], value);
+                }
+              },
               itemBuilder: (ctx) => [
-                if (status == 'Waiting' || status == 'Booked')
+                if (status == 'Waiting' || status == 'Booked') ...[
                   const PopupMenuItem(value: 'In Progress', child: Text('Start Consultation')),
+                  const PopupMenuItem(
+                    value: 'reminder',
+                    child: Row(
+                      children: [
+                        Icon(Icons.notifications_active_rounded, size: 18, color: blueAccent),
+                        SizedBox(width: 8),
+                        Text('Send Reminder'),
+                      ],
+                    ),
+                  ),
+                ],
                 const PopupMenuItem(value: 'Completed', child: Text('Mark as Completed')),
               ],
             ),

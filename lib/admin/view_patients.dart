@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:intl/intl.dart';
 
 class ViewPatientsPage extends StatefulWidget {
   const ViewPatientsPage({super.key});
@@ -116,7 +117,6 @@ class _ViewPatientsPageState extends State<ViewPatientsPage> {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
           .collection('patients')
-          .orderBy('createdAt', descending: true)
           .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
@@ -136,7 +136,19 @@ class _ViewPatientsPageState extends State<ViewPatientsPage> {
           );
         }
 
-        var patients = snapshot.data?.docs ?? [];
+        final patientsDocs = snapshot.data?.docs ?? [];
+        
+        // Convert to a list we can manipulate and sort client-side
+        var patients = patientsDocs.toList();
+
+        // Client-side sort by createdAt (descending)
+        patients.sort((a, b) {
+          final aData = a.data() as Map<String, dynamic>;
+          final bData = b.data() as Map<String, dynamic>;
+          final aTime = (aData['createdAt'] as Timestamp?)?.toDate() ?? DateTime(2000);
+          final bTime = (bData['createdAt'] as Timestamp?)?.toDate() ?? DateTime(2000);
+          return bTime.compareTo(aTime);
+        });
         
         // Apply search filter
         if (_searchQuery.isNotEmpty) {
@@ -741,11 +753,16 @@ class PatientRecordsPage extends StatelessWidget {
         return const Center(child: Text("Unknown record type"));
     }
     
+    // Filter based on collection-specific field names:
+    // - 'predictions' uses 'patientId'
+    // - 'appointments' uses 'patientId'
+    // - 'prescriptions' uses 'patient_id'
+    final idField = recordType == 'Prescriptions' ? 'patient_id' : 'patientId';
+
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
           .collection(collection)
-          .where('patient_id', isEqualTo: patientId)
-          .orderBy(dateField, descending: true)
+          .where(idField, isEqualTo: patientId)
           .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
@@ -766,7 +783,21 @@ class PatientRecordsPage extends StatelessWidget {
           );
         }
         
-        final records = snapshot.data?.docs ?? [];
+        final recordsDocs = snapshot.data?.docs ?? [];
+        var records = recordsDocs.toList();
+
+        // Client-side sort by date
+        records.sort((a, b) {
+          final aData = a.data() as Map<String, dynamic>;
+          final bData = b.data() as Map<String, dynamic>;
+          final aDate = (aData['createdAt'] as Timestamp?)?.toDate() ?? 
+                       (aData['appodate'] as Timestamp?)?.toDate() ?? 
+                       DateTime(2000);
+          final bDate = (bData['createdAt'] as Timestamp?)?.toDate() ?? 
+                       (bData['appodate'] as Timestamp?)?.toDate() ?? 
+                       DateTime(2000);
+          return bDate.compareTo(aDate);
+        });
         
         if (records.isEmpty) {
           return Center(
@@ -801,14 +832,14 @@ class PatientRecordsPage extends StatelessWidget {
           itemCount: records.length,
           itemBuilder: (context, index) {
             final data = records[index].data() as Map<String, dynamic>;
-            return _buildRecordCard(data);
+            return _buildRecordCard(context, data);
           },
         );
       },
     );
   }
   
-  Widget _buildRecordCard(Map<String, dynamic> data) {
+  Widget _buildRecordCard(BuildContext context, Map<String, dynamic> data) {
     final date = (data['createdAt'] as Timestamp?)?.toDate() ?? 
                  (data['appodate'] as Timestamp?)?.toDate();
     final dateStr = date != null 
@@ -846,53 +877,231 @@ class PatientRecordsPage extends StatelessWidget {
         color = accentColor;
     }
     
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: cardColor,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.shade200),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(12),
+    return GestureDetector(
+      onTap: () => _showRecordDetails(context, data),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: cardColor,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.grey.shade200),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.02),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
             ),
-            child: Icon(icon, color: color, size: 22),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, color: color, size: 22),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: textColor,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: TextStyle(fontSize: 13, color: Colors.grey.shade500),
+                  ),
+                ],
+              ),
+            ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                    color: textColor,
-                  ),
+                  dateStr,
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: textColor),
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  subtitle,
-                  style: TextStyle(fontSize: 13, color: Colors.grey.shade500),
-                ),
+                if (recordType == 'AI Scans')
+                  const Icon(Icons.remove_red_eye_outlined, size: 14, color: accentColor),
               ],
             ),
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showRecordDetails(BuildContext context, Map<String, dynamic> data) {
+    if (recordType != 'AI Scans') return;
+
+    final imgUrl = data['imageUrl'] ?? data['image_url'];
+    final createdAt = data['createdAt'] as Timestamp?;
+    final condition = data['prediction'] ?? data['condition'] ?? 'Unknown';
+    final confidence = ((data['confidence'] ?? 0) as num) * 100;
+    final severity = data['severity'] ?? 'N/A';
+    
+    // 'recommendations' is stored as a List<String>
+    final rawRecs = data['recommendations'];
+    String recommendationsText;
+    if (rawRecs is List && rawRecs.isNotEmpty) {
+      recommendationsText = rawRecs.map((r) => '• $r').join('\n');
+    } else if (rawRecs is String && rawRecs.isNotEmpty) {
+      recommendationsText = rawRecs;
+    } else {
+      recommendationsText = "Consult with a dermatologist for a professional diagnosis and treatment plan.";
+    }
+
+    // Severity color
+    Color severityColor;
+    final sevLower = severity.toString().toLowerCase();
+    if (sevLower.contains('severe') || sevLower.contains('high') || sevLower.contains('critical')) {
+      severityColor = Colors.red;
+    } else if (sevLower.contains('moderate') || sevLower.contains('medium')) {
+      severityColor = Colors.orange;
+    } else {
+      severityColor = const Color(0xFF10B981);
+    }
+
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
-                dateStr,
-                style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+              // Image Section — only show if we have a URL
+              if (imgUrl != null)
+                ClipRRect(
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+                  child: Image.network(
+                    imgUrl,
+                    width: double.infinity,
+                    height: 200,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Container(
+                      height: 200,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade200,
+                        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+                      ),
+                      child: const Icon(Icons.broken_image_outlined, size: 48, color: Colors.grey),
+                    ),
+                  ),
+                )
+              else
+                // Nice colored header banner instead of grey placeholder
+                Container(
+                  height: 120,
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF10B981).withValues(alpha: 0.1),
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+                  ),
+                  child: const Icon(Icons.biotech_rounded, size: 56, color: Color(0xFF10B981)),
+                ),
+              
+              Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      "AI Analysis Result",
+                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: textColor),
+                    ),
+                    const SizedBox(height: 20),
+                    _buildDetailRow("Detected Condition", condition),
+                    _buildDetailRow("Confidence Level", "${confidence.toStringAsFixed(1)}%"),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const SizedBox(
+                          width: 130,
+                          child: Text("Severity", style: TextStyle(fontSize: 13, color: Colors.grey)),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: severityColor.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            severity,
+                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: severityColor),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    if (createdAt != null) ...[
+                      _buildDetailRow("Analysis Date", DateFormat('MMM dd, yyyy • hh:mm a').format(createdAt.toDate())),
+                    ],
+                    const SizedBox(height: 12),
+                    const Divider(),
+                    const SizedBox(height: 12),
+                    const Text(
+                      "Recommendations",
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: textColor),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      recommendationsText,
+                      style: TextStyle(fontSize: 14, color: Colors.grey.shade600, height: 1.7),
+                    ),
+                    const SizedBox(height: 30),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: () => Navigator.pop(ctx),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: accentColor,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                        ),
+                        child: const Text("Close", style: TextStyle(fontWeight: FontWeight.bold)),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDetailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 130,
+            child: Text(
+              label,
+              style: TextStyle(fontSize: 13, color: Colors.grey.shade500),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: textColor),
+            ),
           ),
         ],
       ),

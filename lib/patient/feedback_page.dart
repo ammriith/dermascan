@@ -230,23 +230,27 @@ class _FeedbackPageState extends State<FeedbackPage> {
                   ),
                 ],
               ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: List.generate(5, (index) {
-                  final starIndex = index + 1;
-                  return GestureDetector(
-                    onTap: () => setState(() => _rating = starIndex),
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
-                      padding: const EdgeInsets.all(8),
-                      child: Icon(
-                        starIndex <= _rating ? Icons.star_rounded : Icons.star_outline_rounded,
-                        size: 40,
-                        color: starIndex <= _rating ? Colors.amber : Colors.grey.shade300,
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: List.generate(5, (index) {
+                    final starIndex = index + 1;
+                    return GestureDetector(
+                      onTap: () => setState(() => _rating = starIndex),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        padding: const EdgeInsets.all(8),
+                        child: Icon(
+                          starIndex <= _rating ? Icons.star_rounded : Icons.star_outline_rounded,
+                          size: 40,
+                          color: starIndex <= _rating ? Colors.amber : Colors.grey.shade300,
+                        ),
                       ),
-                    ),
-                  );
-                }),
+                    );
+                  }),
+                ),
               ),
             ),
 
@@ -284,7 +288,7 @@ class _FeedbackPageState extends State<FeedbackPage> {
                           ..._doctors.map((doctor) {
                             return DropdownMenuItem<String>(
                               value: doctor['id'],
-                              child: Text('Dr. ${doctor['name']} - ${doctor['specialization']}'),
+                              child: Text('Dr. ${doctor['name']} - ${doctor['specialization']}', overflow: TextOverflow.ellipsis, maxLines: 1),
                             );
                           }),
                         ],

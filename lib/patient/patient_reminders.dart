@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
+import 'package:dermascan/services/notification_service.dart';
 
 class PatientRemindersPage extends StatefulWidget {
   const PatientRemindersPage({super.key});
@@ -32,9 +33,10 @@ class _PatientRemindersPageState extends State<PatientRemindersPage> {
 
   bool _isLoading = true;
   
-  // Medications & Suggestions
+  // Medications, Suggestions & Reminders
   List<Map<String, dynamic>> _medications = [];
   List<Map<String, dynamic>> _doctorSuggestions = [];
+  List<Map<String, dynamic>> _consultationReminders = [];
 
   @override
   void initState() {
@@ -50,55 +52,88 @@ class _PatientRemindersPageState extends State<PatientRemindersPage> {
     }
 
     try {
-      // Load medications from completed appointments
+      // Load all appointments to check for completions and upcoming reminders
       final appointmentsSnapshot = await _firestore
           .collection('appointments')
           .where('patientId', isEqualTo: userId)
-          .where('status', isEqualTo: 'Completed')
           .get();
 
       _medications = [];
       _doctorSuggestions = [];
+      _consultationReminders = [];
 
       for (var doc in appointmentsSnapshot.docs) {
         final data = doc.data();
+        final status = data['status'] ?? '';
         
-        // Check for medications
-        if (data['medications'] != null && (data['medications'] as String).isNotEmpty) {
+        // 1. Process Completed Appointments (Medications & Suggestions)
+        if (status == 'Completed') {
+          if (data['medications'] != null && (data['medications'] as String).isNotEmpty) {
+            _medications.add({
+              'id': doc.id,
+              'medication': data['medications'],
+              'doctorName': data['doctorName'] ?? 'Doctor',
+              'date': data['appodate'],
+            });
+          }
+          if (data['doctorNotes'] != null && (data['doctorNotes'] as String).isNotEmpty) {
+            _doctorSuggestions.add({
+              'id': doc.id,
+              'suggestion': data['doctorNotes'],
+              'doctorName': data['doctorName'] ?? 'Doctor',
+              'date': data['appodate'],
+            });
+          }
+        }
+
+        // 2. Process Upcoming Reminders (Only show future dates)
+        final appoDate = (data['appodate'] as Timestamp?)?.toDate();
+        if ((status == 'Booked' || status == 'Waiting') && 
+            data['reminderSent'] == true && 
+            appoDate != null && 
+            appoDate.isAfter(DateTime.now())) {
+          _consultationReminders.add({
+            'id': doc.id,
+            'type': 'Appointment Reminder',
+            'doctorName': data['doctorName'] ?? 'Doctor',
+            'date': data['appodate'],
+            'timeSlot': data['timeSlot'] ?? '',
+            'reminderAt': data['reminderAt'],
+          });
+
+          // Proximity notification for appointment
+          NotificationService().checkAndNotifyProximity(
+            id: doc.id,
+            title: '📅 Appointment Tomorrow',
+            body: 'You have an appointment with Dr. ${data['doctorName'] ?? 'Doctor'} at ${data['timeSlot'] ?? 'scheduled time'}',
+            scheduledTime: appoDate,
+          );
+        }
+      }
+
+      // Sort consultation reminders by original appointment date
+      _consultationReminders.sort((a, b) {
+        final aDate = (a['date'] as Timestamp?)?.toDate() ?? DateTime.now();
+        final bDate = (b['date'] as Timestamp?)?.toDate() ?? DateTime.now();
+        return aDate.compareTo(bDate); // Newest appointment first if you want, or soonest
+      });
+
+      // Also load from prescriptions (New report type)
+      final prescriptionsSnapshot = await _firestore
+          .collection('prescriptions')
+          .where('patientId', isEqualTo: userId)
+          .get();
+
+      for (var doc in prescriptionsSnapshot.docs) {
+        final data = doc.data();
+        if (data['medications'] != null && (data['medications'] as String).trim().isNotEmpty) {
           _medications.add({
             'id': doc.id,
             'medication': data['medications'],
             'doctorName': data['doctorName'] ?? 'Doctor',
-            'date': data['appodate'],
-          });
-        }
-
-        // Check for doctor suggestions/notes
-        if (data['doctorNotes'] != null && (data['doctorNotes'] as String).isNotEmpty) {
-          _doctorSuggestions.add({
-            'id': doc.id,
-            'suggestion': data['doctorNotes'],
-            'doctorName': data['doctorName'] ?? 'Doctor',
-            'date': data['appodate'],
-          });
-        }
-      }
-
-      // Also load from scan_results for AI suggestions
-      final scansSnapshot = await _firestore
-          .collection('scan_results')
-          .where('patientId', isEqualTo: userId)
-          .get();
-
-      for (var doc in scansSnapshot.docs) {
-        final data = doc.data();
-        if (data['recommendations'] != null && (data['recommendations'] as String).isNotEmpty) {
-          _doctorSuggestions.add({
-            'id': doc.id,
-            'suggestion': data['recommendations'],
-            'doctorName': 'AI Analysis',
             'date': data['createdAt'],
-            'isAI': true,
+            'diagnosis': data['diagnosis'],
+            'notes': data['notes'],
           });
         }
       }
@@ -126,6 +161,32 @@ class _PatientRemindersPageState extends State<PatientRemindersPage> {
             'doctorName': data['doctorName'] ?? 'Doctor',
             'date': data['createdAt'],
           });
+        }
+        
+        // Add follow-up reminders if doctor set a date (Only show future dates)
+        final followUp = (data['followUpDate'] as Timestamp?)?.toDate();
+        if (followUp != null && followUp.isAfter(DateTime.now())) {
+          String timeStr = data['followUpTime'] ?? '';
+          if (timeStr.isEmpty) {
+            timeStr = DateFormat('hh:mm a').format(followUp);
+          }
+
+          _consultationReminders.add({
+            'id': doc.id,
+            'doctorName': data['doctorName'] ?? 'Doctor',
+            'date': data['followUpDate'],
+            'type': 'Follow-up Recommendation',
+            'notes': data['suggestion'] ?? 'Recommended follow-up visit',
+            'timeSlot': timeStr,
+          });
+
+          // Proximity notification for follow-up
+          NotificationService().checkAndNotifyProximity(
+            id: doc.id,
+            title: '🔔 Consultation Reminder',
+            body: 'Recommended follow-up visit with Dr. ${data['doctorName'] ?? 'Doctor'} tomorrow',
+            scheduledTime: followUp,
+          );
         }
       }
 
@@ -204,7 +265,7 @@ class _PatientRemindersPageState extends State<PatientRemindersPage> {
                   style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: textPrimary),
                 ),
                 Text(
-                  "Medications & Doctor Suggestions",
+                  "Medications & Treatment Reminders",
                   style: TextStyle(fontSize: 12, color: textSecondary),
                 ),
               ],
@@ -216,11 +277,7 @@ class _PatientRemindersPageState extends State<PatientRemindersPage> {
               color: pinkAccent.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Badge(
-              label: Text('${_medications.length + _doctorSuggestions.length}'),
-              isLabelVisible: _medications.isNotEmpty || _doctorSuggestions.isNotEmpty,
-              child: const Icon(Icons.medical_services_rounded, size: 20, color: pinkAccent),
-            ),
+            child: const Icon(Icons.medical_services_rounded, size: 20, color: pinkAccent),
           ),
         ],
       ),
@@ -228,7 +285,7 @@ class _PatientRemindersPageState extends State<PatientRemindersPage> {
   }
 
   Widget _buildContent() {
-    if (_medications.isEmpty && _doctorSuggestions.isEmpty) {
+    if (_medications.isEmpty && _doctorSuggestions.isEmpty && _consultationReminders.isEmpty) {
       return _buildEmptyState();
     }
 
@@ -244,11 +301,8 @@ class _PatientRemindersPageState extends State<PatientRemindersPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Quick Stats
-            _buildQuickStats(),
-            const SizedBox(height: 24),
 
-            // Medications Section
+            // Medications Section (High Priority)
             if (_medications.isNotEmpty) ...[
               _buildSectionHeader("💊 Medication Reminders", _medications.length, pinkAccent),
               const SizedBox(height: 12),
@@ -256,13 +310,14 @@ class _PatientRemindersPageState extends State<PatientRemindersPage> {
               const SizedBox(height: 24),
             ],
 
-            // Doctor Suggestions Section
-            if (_doctorSuggestions.isNotEmpty) ...[
-              _buildSectionHeader("💬 Doctor's Suggestions", _doctorSuggestions.length, blueAccent),
+            // Consultation Reminders
+            if (_consultationReminders.isNotEmpty) ...[
+              _buildSectionHeader("🔔 Upcoming Consultations", _consultationReminders.length, primaryColor),
               const SizedBox(height: 12),
-              ..._doctorSuggestions.map((s) => _buildSuggestionCard(s)),
+              ..._consultationReminders.map((r) => _buildUpcomingReminderCard(r)),
               const SizedBox(height: 24),
             ],
+
 
             _buildHealthTipsCard(),
           ],
@@ -271,77 +326,6 @@ class _PatientRemindersPageState extends State<PatientRemindersPage> {
     );
   }
 
-  Widget _buildQuickStats() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [primaryColor, primaryDark],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: primaryColor.withValues(alpha: 0.3),
-            blurRadius: 12,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Icon(Icons.medication_rounded, color: Colors.white, size: 24),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  "${_medications.length}",
-                  style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
-                ),
-                Text(
-                  "Medications",
-                  style: TextStyle(color: Colors.white.withValues(alpha: 0.8), fontSize: 11),
-                ),
-              ],
-            ),
-          ),
-          Container(width: 1, height: 60, color: Colors.white.withValues(alpha: 0.3)),
-          Expanded(
-            child: Column(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Icon(Icons.lightbulb_rounded, color: Colors.white, size: 24),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  "${_doctorSuggestions.length}",
-                  style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
-                ),
-                Text(
-                  "Suggestions",
-                  style: TextStyle(color: Colors.white.withValues(alpha: 0.8), fontSize: 11),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 
   Widget _buildSectionHeader(String title, int count, Color color) {
     return Row(
@@ -364,63 +348,204 @@ class _PatientRemindersPageState extends State<PatientRemindersPage> {
     final date = (medication['date'] as Timestamp?)?.toDate();
     final dateStr = date != null ? DateFormat('MMM dd, yyyy').format(date) : '';
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: cardColor,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: pinkAccent.withValues(alpha: 0.2)),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 10)],
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: pinkAccent.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(14),
+    return GestureDetector(
+      onTap: () => _showMedicationDetailsDialog(medication),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: cardColor,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: pinkAccent.withValues(alpha: 0.2)),
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 10)],
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: pinkAccent.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: const Icon(Icons.medication_rounded, color: pinkAccent, size: 26),
             ),
-            child: const Icon(Icons.medication_rounded, color: pinkAccent, size: 26),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        "Prescribed by Dr. ${medication['doctorName']}",
-                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: textPrimary),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          "Prescribed by Dr. ${medication['doctorName']}",
+                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: textPrimary),
+                        ),
                       ),
+                      const Icon(Icons.chevron_right_rounded, color: textSecondary, size: 20),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Text(dateStr, style: const TextStyle(fontSize: 11, color: textSecondary)),
+                      if (medication['diagnosis'] != null && (medication['diagnosis'] as String).isNotEmpty) ...[
+                        const SizedBox(width: 8),
+                        Text("•", style: TextStyle(color: Colors.grey.shade400)),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            medication['diagnosis'],
+                            style: const TextStyle(fontSize: 11, color: pinkAccent, fontWeight: FontWeight.w600),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: pinkAccent.withValues(alpha: 0.05),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: pinkAccent.withValues(alpha: 0.1)),
                     ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  dateStr,
-                  style: const TextStyle(fontSize: 11, color: textSecondary),
-                ),
-                const SizedBox(height: 10),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: pinkAccent.withValues(alpha: 0.05),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: pinkAccent.withValues(alpha: 0.1)),
+                    child: Text(
+                      medication['medication'],
+                      style: const TextStyle(fontSize: 14, color: textPrimary, height: 1.5),
+                    ),
                   ),
-                  child: Text(
-                    medication['medication'],
-                    style: const TextStyle(fontSize: 14, color: textPrimary, height: 1.5),
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showMedicationDetailsDialog(Map<String, dynamic> med) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
+          top: 24,
+          left: 24,
+          right: 24,
+        ),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: pinkAccent.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: const Icon(Icons.medication_rounded, color: pinkAccent, size: 28),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          "Consultation Details",
+                          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: textPrimary),
+                        ),
+                        Text(
+                          "Dr. ${med['doctorName']}",
+                          style: const TextStyle(fontSize: 14, color: textSecondary),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+              
+              const Text("DIAGNOSIS", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: textSecondary, letterSpacing: 1)),
+              const SizedBox(height: 8),
+              Text(
+                med['diagnosis'] ?? 'No primary diagnosis recorded',
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: textPrimary),
+              ),
+              const SizedBox(height: 20),
+
+              const Text("CONSULTATION NOTES", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: textSecondary, letterSpacing: 1)),
+              const SizedBox(height: 8),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: bgColor,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.grey.shade200),
+                ),
+                child: Text(
+                  med['notes'] ?? 'No clinical notes were recorded for this visit.',
+                  style: const TextStyle(fontSize: 14, color: textPrimary, height: 1.6),
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              const Text("MEDICINES PRESCRIBED", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: textSecondary, letterSpacing: 1)),
+              const SizedBox(height: 8),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: pinkAccent.withValues(alpha: 0.05),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: pinkAccent.withValues(alpha: 0.1)),
+                ),
+                child: Text(
+                  med['medication'],
+                  style: const TextStyle(fontSize: 15, color: textPrimary, fontWeight: FontWeight.w500, height: 1.6),
+                ),
+              ),
+              const SizedBox(height: 32),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: pinkAccent,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  ),
+                  child: const Text("Close", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -500,6 +625,85 @@ class _PatientRemindersPageState extends State<PatientRemindersPage> {
                   child: Text(
                     suggestion['suggestion'],
                     style: const TextStyle(fontSize: 14, color: textPrimary, height: 1.5),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildUpcomingReminderCard(Map<String, dynamic> reminder) {
+    final appoDate = (reminder['date'] as Timestamp?)?.toDate();
+    final dateStr = appoDate != null ? DateFormat('MMM dd, yyyy').format(appoDate) : '';
+    final timeStr = reminder['timeSlot'] ?? '';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [primaryColor.withValues(alpha: 0.1), bgColor],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: primaryColor.withValues(alpha: 0.3), width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: primaryColor.withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(14),
+              boxShadow: [BoxShadow(color: primaryColor.withValues(alpha: 0.2), blurRadius: 8)],
+            ),
+            child: const Icon(Icons.notifications_active_rounded, color: primaryColor, size: 28),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  reminder['type'] ?? "Consultation Reminder",
+                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: textPrimary),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  "Dr. ${reminder['doctorName']} is expecting you",
+                  style: const TextStyle(fontSize: 13, color: textSecondary),
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: primaryColor.withValues(alpha: 0.2)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.calendar_month_rounded, size: 14, color: primaryColor),
+                      const SizedBox(width: 6),
+                      Text(dateStr, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: textPrimary)),
+                      const SizedBox(width: 12),
+                      const Icon(Icons.access_time_rounded, size: 14, color: primaryColor),
+                      const SizedBox(width: 6),
+                      Text(timeStr, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: textPrimary)),
+                    ],
                   ),
                 ),
               ],

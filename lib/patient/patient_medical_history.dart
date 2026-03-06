@@ -11,7 +11,7 @@ class PatientMedicalHistoryPage extends StatefulWidget {
   State<PatientMedicalHistoryPage> createState() => _PatientMedicalHistoryPageState();
 }
 
-class _PatientMedicalHistoryPageState extends State<PatientMedicalHistoryPage> with SingleTickerProviderStateMixin {
+class _PatientMedicalHistoryPageState extends State<PatientMedicalHistoryPage> {
   // 🎨 Premium Color Palette
   static const Color primaryColor = Color(0xFF4FD1C5);
   static const Color primaryDark = Color(0xFF38B2AC);
@@ -30,8 +30,7 @@ class _PatientMedicalHistoryPageState extends State<PatientMedicalHistoryPage> w
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
-  late TabController _tabController;
-  bool _isLoading = true;
+  late bool _isLoading = true;
   
   List<Map<String, dynamic>> _scanResults = [];
   Map<String, dynamic> _stats = {};
@@ -42,13 +41,11 @@ class _PatientMedicalHistoryPageState extends State<PatientMedicalHistoryPage> w
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
     _setupRealtimeListeners();
   }
 
   @override
   void dispose() {
-    _tabController.dispose();
     _scansSubscription?.cancel();
     super.dispose();
   }
@@ -56,14 +53,20 @@ class _PatientMedicalHistoryPageState extends State<PatientMedicalHistoryPage> w
   void _setupRealtimeListeners() {
     final userId = _auth.currentUser?.uid;
     if (userId == null) {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
       return;
     }
 
+    // Set a timeout to stop loading if no data comes in (e.g. offline)
+    Timer(const Duration(seconds: 5), () {
+      if (mounted && _isLoading) {
+        setState(() => _isLoading = false);
+      }
+    });
 
     // Real-time listener for scan results
     _scansSubscription = _firestore
-        .collection('scan_results')
+        .collection('predictions')
         .where('patientId', isEqualTo: userId)
         .snapshots()
         .listen((snapshot) {
@@ -81,11 +84,18 @@ class _PatientMedicalHistoryPageState extends State<PatientMedicalHistoryPage> w
       });
 
       _updateStats();
-      if (mounted) setState(() {});
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }, onError: (e) {
       debugPrint('Error listening to scans: $e');
+      if (mounted) setState(() => _isLoading = false);
     });
   }
+
+
 
   void _updateStats() {
     _stats = {
@@ -110,18 +120,10 @@ class _PatientMedicalHistoryPageState extends State<PatientMedicalHistoryPage> w
         child: Column(
           children: [
             _buildHeader(),
-            if (!_isLoading) _buildStatsCards(),
-            _buildTabBar(),
             Expanded(
               child: _isLoading
                   ? const Center(child: CircularProgressIndicator(color: primaryColor))
-                  : TabBarView(
-                      controller: _tabController,
-                      children: [
-                        _buildReportsTab(),
-                        _buildTimelineTab(),
-                      ],
-                    ),
+                  : _buildReportsTab(),
             ),
           ],
         ),
@@ -165,7 +167,7 @@ class _PatientMedicalHistoryPageState extends State<PatientMedicalHistoryPage> w
                   style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: textPrimary),
                 ),
                 Text(
-                  "Your reports & timeline",
+                  "Your scan reports",
                   style: TextStyle(fontSize: 12, color: textSecondary),
                 ),
               ],
@@ -187,84 +189,8 @@ class _PatientMedicalHistoryPageState extends State<PatientMedicalHistoryPage> w
     );
   }
 
-  Widget _buildStatsCards() {
-    return Container(
-      height: 100,
-      margin: const EdgeInsets.fromLTRB(24, 16, 24, 8),
-      child: Row(
-        children: [
-          _buildStatCard(
-            "${_stats['totalScans'] ?? 0}",
-            "Total Reports",
-            Icons.description_rounded,
-            primaryColor,
-          ),
-          const SizedBox(width: 12),
-          _buildStatCard(
-            "${_stats['severeCount'] ?? 0}",
-            "Severe Alerts",
-            Icons.warning_amber_rounded,
-            redAccent,
-          ),
-          const SizedBox(width: 12),
-          _buildStatCard(
-            _stats['latestScan'] == 'None' ? 'N/A' : 'Latest',
-            _stats['latestScan'] ?? 'None',
-            Icons.history_toggle_off_rounded,
-            purpleAccent,
-          ),
-        ],
-      ),
-    );
-  }
 
-  Widget _buildStatCard(String value, String label, IconData icon, Color color) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: cardColor,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [BoxShadow(color: color.withValues(alpha: 0.1), blurRadius: 10)],
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, color: color, size: 24),
-            const SizedBox(height: 8),
-            Text(value, style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: color)),
-            Text(label, style: const TextStyle(fontSize: 11, color: textSecondary)),
-          ],
-        ),
-      ),
-    );
-  }
 
-  Widget _buildTabBar() {
-    return Container(
-      margin: const EdgeInsets.fromLTRB(24, 16, 24, 8),
-      decoration: BoxDecoration(
-        color: Colors.grey.shade100,
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: TabBar(
-        controller: _tabController,
-        indicator: BoxDecoration(
-          color: primaryColor,
-          borderRadius: BorderRadius.circular(14),
-        ),
-        labelColor: Colors.white,
-        unselectedLabelColor: textSecondary,
-        dividerColor: Colors.transparent,
-        indicatorSize: TabBarIndicatorSize.tab,
-        labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-        tabs: const [
-          Tab(text: "Reports"),
-          Tab(text: "Timeline"),
-        ],
-      ),
-    );
-  }
 
   // ═══════════════════════════════════════════════════════════════════════════
   // TAB 1: APPOINTMENTS
@@ -296,7 +222,7 @@ class _PatientMedicalHistoryPageState extends State<PatientMedicalHistoryPage> w
   }
 
   Widget _buildReportCard(Map<String, dynamic> report) {
-    final condition = report['condition'] ?? 'Unknown';
+    final condition = report['prediction'] ?? report['condition'] ?? 'Unknown';
     final confidence = report['confidence'] ?? 0.0;
     final severity = report['severity'] ?? 'Unknown';
     final recommendations = report['recommendations'] as List<dynamic>? ?? [];
@@ -363,20 +289,26 @@ class _PatientMedicalHistoryPageState extends State<PatientMedicalHistoryPage> w
                         Text(
                           condition,
                           style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: textPrimary),
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 1,
                         ),
                         Text(dateStr, style: const TextStyle(fontSize: 11, color: textSecondary)),
                       ],
                     ),
                   ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: severityColor,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      severity,
-                      style: const TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.bold),
+                  Flexible(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: severityColor,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        severity,
+                        style: const TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.bold),
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
+                      ),
                     ),
                   ),
                 ],
@@ -443,7 +375,7 @@ class _PatientMedicalHistoryPageState extends State<PatientMedicalHistoryPage> w
   }
 
   void _showReportDetails(Map<String, dynamic> report) {
-    final condition = report['condition'] ?? 'Unknown';
+    final condition = report['prediction'] ?? report['condition'] ?? 'Unknown';
     final confidence = report['confidence'] ?? 0.0;
     final severity = report['severity'] ?? 'Unknown';
     final recommendations = report['recommendations'] as List<dynamic>? ?? [];
@@ -500,6 +432,27 @@ class _PatientMedicalHistoryPageState extends State<PatientMedicalHistoryPage> w
                   controller: controller,
                   padding: const EdgeInsets.all(24),
                   children: [
+                    // Image Preview (if available)
+                    if (report['imageUrl'] != null) ...[
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(20),
+                        child: Image.network(
+                          report['imageUrl'],
+                          height: 250,
+                          width: double.infinity,
+                          fit: BoxFit.cover,
+                          loadingBuilder: (context, child, loadingProgress) {
+                            if (loadingProgress == null) return child;
+                            return Container(
+                              height: 250,
+                              color: Colors.grey.shade100,
+                              child: const Center(child: CircularProgressIndicator()),
+                            );
+                          },
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                    ],
                     // Header
                     Row(
                       children: [
@@ -519,6 +472,8 @@ class _PatientMedicalHistoryPageState extends State<PatientMedicalHistoryPage> w
                               Text(
                                 condition,
                                 style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: textPrimary),
+                                overflow: TextOverflow.ellipsis,
+                                maxLines: 1,
                               ),
                               Text(dateStr, style: const TextStyle(fontSize: 12, color: textSecondary)),
                             ],
@@ -549,6 +504,42 @@ class _PatientMedicalHistoryPageState extends State<PatientMedicalHistoryPage> w
                       ],
                     ),
                     const SizedBox(height: 24),
+
+                    // Analysis Image
+                    if (report['imageUrl'] != null) ...[
+                      const Text("Uploaded Image", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: textPrimary)),
+                      const SizedBox(height: 12),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(16),
+                        child: Container(
+                          width: double.infinity,
+                          height: 200,
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade100,
+                            border: Border.all(color: Colors.grey.shade200),
+                          ),
+                          child: Image.network(
+                            report['imageUrl'],
+                            fit: BoxFit.cover,
+                            loadingBuilder: (context, child, loadingProgress) {
+                              if (loadingProgress == null) return child;
+                              return const Center(child: CircularProgressIndicator(strokeWidth: 2));
+                            },
+                            errorBuilder: (context, error, stackTrace) => const Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.broken_image_outlined, color: Colors.grey, size: 32),
+                                  SizedBox(height: 8),
+                                  Text("Image failed to load", style: TextStyle(color: Colors.grey, fontSize: 12)),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                    ],
                     
                     // Description
                     const Text("Description", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: textPrimary)),
@@ -636,116 +627,7 @@ class _PatientMedicalHistoryPageState extends State<PatientMedicalHistoryPage> w
   // TAB 3: TIMELINE
   // ═══════════════════════════════════════════════════════════════════════════
 
-  Widget _buildTimelineTab() {
-    // Combine appointments and scans into a timeline
-    List<Map<String, dynamic>> timeline = [];
-    
-    for (var scan in _scanResults) {
-      timeline.add({
-        'type': 'scan',
-        'date': (scan['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
-        'data': scan,
-      });
-    }
-    
-    // Sort by date (newest first)
-    timeline.sort((a, b) => (b['date'] as DateTime).compareTo(a['date'] as DateTime));
 
-    if (timeline.isEmpty) {
-      return _buildEmptyState(
-        Icons.timeline_rounded,
-        "No History",
-        "Your medical timeline will appear here",
-      );
-    }
-
-    return RefreshIndicator(
-      onRefresh: _refreshData,
-      color: primaryColor,
-      child: ListView.builder(
-        padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
-        itemCount: timeline.length,
-        itemBuilder: (ctx, index) => _buildTimelineItem(timeline[index], index == timeline.length - 1),
-      ),
-    );
-  }
-
-  Widget _buildTimelineItem(Map<String, dynamic> item, bool isLast) {
-    final type = item['type'] as String;
-    final date = item['date'] as DateTime;
-    final data = item['data'] as Map<String, dynamic>;
-    
-    final severity = (data['severity'] ?? 'Unknown').toString().toLowerCase();
-    final Color dotColor = severity == 'mild' ? greenAccent : (severity == 'moderate' ? orangeAccent : redAccent);
-    final IconData icon = Icons.biotech_rounded;
-    final String title = data['condition'] ?? 'Skin Analysis';
-    final String subtitle = "Severity: ${data['severity'] ?? 'Unknown'}";
-
-    return IntrinsicHeight(
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Timeline line and dot
-          SizedBox(
-            width: 60,
-            child: Column(
-              children: [
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: dotColor.withValues(alpha: 0.1),
-                    shape: BoxShape.circle,
-                    border: Border.all(color: dotColor, width: 2),
-                  ),
-                  child: Icon(icon, color: dotColor, size: 18),
-                ),
-                if (!isLast)
-                  Expanded(
-                    child: Container(
-                      width: 2,
-                      margin: const EdgeInsets.symmetric(vertical: 4),
-                      color: Colors.grey.shade200,
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          // Content
-          Expanded(
-            child: Container(
-              margin: const EdgeInsets.only(bottom: 16),
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: cardColor,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: Colors.grey.shade100),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    DateFormat('MMM dd, yyyy • hh:mm a').format(date),
-                    style: TextStyle(fontSize: 11, color: dotColor, fontWeight: FontWeight.w600),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    title,
-                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: textPrimary),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    subtitle,
-                    style: const TextStyle(fontSize: 12, color: textSecondary),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 
   Widget _buildEmptyState(IconData icon, String title, String subtitle) {
     return Center(
